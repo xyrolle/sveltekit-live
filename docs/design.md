@@ -81,7 +81,7 @@ A hint for a write that rolled back costs one re-read. A hint never published (t
 - The hub holds its sockets with the WebSocket Hibernation API and answers pings without waking, so an idle tenant costs nothing.
 - It keeps a series id and the number of its last publication in its storage, so both survive eviction and deploys. Each publication is `{ n, hints }`, and every socket gets every number, even with none of its hints, so a screen can tell when it missed one.
 - **Who hears what.** `connect` hands the hub the user that `authorize` returned, and the hub tags the socket with it. A hint with `userId` reaches only that user's sockets; the others get the number with no hints. Every other hint reaches every socket on the hub: its kind and id are visible to every user connected there, as metadata, never data. An app whose users must not see each other's activity (staff and customers, say) uses one hub per audience, `` getByName(`${tenant}:staff`) ``, and publishes to each that should hear.
-- On each socket it takes, it says hello: `{ series, n, version }`, where `version` is Kit's build of the Worker that took the socket.
+- On each socket it takes, it says hello: `{ series, n, version }`. `version` is the build of the Worker that served the handshake: Kit's `version` from `$app/env` (the app's `version.name`, a timestamp of the build by default), which `connect` reads there and passes to the hub with the upgrade. The browser compares it with its own `version` from the same module.
 - The hub authorizes nothing. Sockets reach it only through `connect`; publications only through the app's binding.
 
 ### The socket route
