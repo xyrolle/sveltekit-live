@@ -8,6 +8,7 @@
 	"include": [
 		"src/hub.ts",
 		"src/connect.ts",
+		"src/publish.ts",
 		"src/read-again.ts",
 		"src/server.ts",
 		"test/worker"

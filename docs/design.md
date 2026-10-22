@@ -28,7 +28,7 @@ export const readAgain = readAgainCommand(followed);
 export const add = command(v.string(), async (text) => {
 	const { tenant } = await signedIn();
 	const id = await insertTodo(tenant, text);
-	await env.LIVE.getByName(tenant).publish([{ kind: "todo", id }]);
+	await publish(env.LIVE.getByName(tenant), [{ kind: "todo", id }]);
 });
 ```
 
@@ -53,7 +53,7 @@ export const GET: RequestHandler = async ({ request, locals }) => {
 
 The Worker entry exports `LiveHub` from `sveltekit-live/hub`, bound as a Durable Object (`env.LIVE`).
 
-Public API: `follows`, `readAgainCommand`, `connect`, `followChanges`, `LiveHub`, and the `Hint` type.
+Public API: `follows`, `readAgainCommand`, `connect`, `publish`, `followChanges`, `LiveHub`, and the `Hint` type.
 
 ## Decisions
 
@@ -74,7 +74,7 @@ Rejected: a Vite plugin or code generation (the source app generates the list fr
 
 ### A command publishes what it changed
 
-The command calls `publish(hints)` on its tenant's hub after its write commits, a Durable Object RPC. A `changes()` wrapper around the handler was rejected: it would need the tenant, which only the handler knows, and a new record's id exists only after the write.
+The command calls `publish(hub, hints)` with its tenant's hub after its write commits, a Durable Object RPC. A `changes()` wrapper around the handler was rejected: it would need the tenant, which only the handler knows, and a new record's id exists only after the write.
 
 A hint for a write that rolled back costs one re-read. A hint never published (the Worker died between commit and publish) is lost, and nothing notices, as no number was taken. Publishing from an outbox fixes that and is the app's (follow-up).
 
@@ -113,7 +113,7 @@ Access is checked once, at the handshake. A socket outlives the session it was o
 
 ### Development
 
-Durable Objects run only in the built Worker; adapter-cloudflare's `vite dev` has none. So `followChanges()` does nothing under `vite dev`; `wrangler dev` on the build runs the real path.
+Durable Objects run only in the built Worker; adapter-cloudflare's `vite dev` has none. So under `vite dev`, `publish` and `followChanges()` do nothing; `wrangler dev` on the build runs the real path.
 
 ### Packaging
 
