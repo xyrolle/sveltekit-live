@@ -27,6 +27,7 @@ export function readAgainCommand(
 			// Asynchronous, as a query's schema may validate its argument so.
 			for await (const { arg, query, ignore } of requested(read, Infinity)) {
 				if (follows.some((follow) => isHeard(follow, heard, arg))) {
+					// Kit awaits the refresh and sends it with the command's answer.
 					void query.refresh();
 				} else {
 					ignore();
