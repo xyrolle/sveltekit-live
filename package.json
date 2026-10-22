@@ -17,6 +17,10 @@
 			"types": "./dist/index.d.ts",
 			"default": "./dist/index.js"
 		},
+		"./client": {
+			"types": "./dist/client.d.ts",
+			"default": "./dist/client.js"
+		},
 		"./hub": {
 			"types": "./dist/hub.d.ts",
 			"default": "./dist/hub.js"
@@ -34,13 +38,15 @@
 		"test": "vitest run"
 	},
 	"peerDependencies": {
-		"@sveltejs/kit": "^3.1.0"
+		"@sveltejs/kit": "^3.1.0",
+		"svelte": "^5.57.0"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.6.2",
 		"@cloudflare/workers-types": "5.20261021.1",
 		"@sveltejs/kit": "3.1.0",
 		"@types/node": "24.19.2",
+		"svelte": "5.57.2",
 		"typescript": "7.0.2",
 		"vitest": "5.0.5",
 		"wrangler": "4.151.3"

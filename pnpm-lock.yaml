@@ -178,6 +178,9 @@ importers:
       '@types/node':
         specifier: 24.19.2
         version: 24.19.2
+      svelte:
+        specifier: 5.57.2
+        version: 5.57.2
       typescript:
         specifier: 7.0.2
         version: 7.0.2
