@@ -6,9 +6,11 @@ A command publishes what it changed. A query declares what it follows. A Durable
 
 There's no sync engine, no client cache to keep consistent and no polling, just invalidation with the reads you already have. `docs/design.md` has the decisions and their reasons.
 
-**Status:** first version. Not on npm yet.
+**Status:** first version.
 
 ## Install
+
+It's not on npm yet. Installed from GitHub, it builds itself, which pnpm runs only once the app allows it: add the key pnpm prints to `allowBuilds` in `pnpm-workspace.yaml`, then install again.
 
 ```sh
 pnpm add github:xyrolle/sveltekit-live
