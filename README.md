@@ -73,7 +73,7 @@ export const toggle = command(v.string(), async (id) => {
 	await env.DB.prepare("update todos set done = 1 - done where id = ?")
 		.bind(id)
 		.run();
-	await env.LIVE.getByName("board").publish([{ kind: "todo", id }]);
+	await publish(env.LIVE.getByName("board"), [{ kind: "todo", id }]);
 });
 ```
 
@@ -103,14 +103,15 @@ In the example, `pnpm build` and then `pnpm preview` (`wrangler dev`) run it.
 
 - **`follows(read, ...what)`** (`sveltekit-live`): what a remote query follows. Each of `what` is a kind, followed whole, or `{ kind, id }`, where `id(arg)` names the record that the query's argument shows.
 - **`Hint`** (`sveltekit-live`): `{ kind: string; id?: string; userId?: string }`. A hint with a `userId` reaches only that user's sockets.
+- **`publish(hub, hints)`** (`sveltekit-live/server`): sends the hints, numbered, to every socket on `hub`. Under `vite dev` it does nothing.
 - **`readAgainCommand(followed)`** (`sveltekit-live/server`): the command that screens read again through. Each read refreshes through its own query and that query's checks; the command has no guard of its own.
 - **`connect(request, { hub, user })`** (`sveltekit-live/server`): hands the socket to `hub`, for `user`. It answers 426 to a request that is no WebSocket upgrade, and 403 to one from another origin.
 - **`followChanges({ socket, followed, readAgain })`** (`sveltekit-live/client`): called once, in the root layout. It opens one socket per tab, to the route at `socket`.
-- **`LiveHub`** (`sveltekit-live/hub`): the Durable Object. `publish(hints)` sends them, numbered, to every socket on the hub.
+- **`LiveHub`** (`sveltekit-live/hub`): the Durable Object that holds a tenant's sockets.
 
 ## Limitations
 
-- Nothing is live under `vite dev`, as Durable Objects exist only in the built Worker. Build, then run `wrangler dev`.
+- Changes from other tabs and users need the built Worker: under `vite dev` there are no Durable Objects, so `publish` and `followChanges` do nothing. Build, then run `wrangler dev`.
 - Sockets are for browsers. `connect` refuses a request whose `Origin` is not the app's own, including one with no `Origin`.
 - A hint without a `userId` reaches every socket on its hub: its kind and id are visible to every user connected there, as metadata, never data. Users who must not see each other's activity (staff and customers, say) belong on separate hubs, `` getByName(`${tenant}:staff`) ``, with each change published to every hub that should hear it.
 - Access is checked once, at the handshake. A socket outlives the session it was opened under, until it closes.

@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import { error } from "@sveltejs/kit";
+import { publish } from "sveltekit-live/server";
 import * as v from "valibot";
 import { command, query } from "$app/server";
 
@@ -36,7 +37,7 @@ export const add = command(
 		)
 			.bind(crypto.randomUUID(), text, Date.now())
 			.run();
-		await env.LIVE.getByName("board").publish([{ kind: "todos" }]);
+		await publish(env.LIVE.getByName("board"), [{ kind: "todos" }]);
 	},
 );
 
@@ -44,5 +45,5 @@ export const toggle = command(v.string(), async (id) => {
 	await env.DB.prepare("update todos set done = 1 - done where id = ?")
 		.bind(id)
 		.run();
-	await env.LIVE.getByName("board").publish([{ kind: "todo", id }]);
+	await publish(env.LIVE.getByName("board"), [{ kind: "todo", id }]);
 });

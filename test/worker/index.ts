@@ -2,6 +2,7 @@ import { WorkerEntrypoint } from "cloudflare:workers";
 import { connect } from "../../src/connect.ts";
 import type { Hint } from "../../src/hint.ts";
 import type { LiveHub } from "../../src/hub.ts";
+import { publish } from "../../src/publish.ts";
 
 export { LiveHub } from "../../src/hub.ts";
 
@@ -23,7 +24,7 @@ export default class TestApp extends WorkerEntrypoint<Env> {
 		return connect(request, { hub: this.env.LIVE.getByName(tenant), user });
 	}
 
-	async publish(tenant: string, hints: Hint[]): Promise<void> {
-		await this.env.LIVE.getByName(tenant).publish(hints);
+	publish(tenant: string, hints: Hint[]): Promise<void> {
+		return publish(this.env.LIVE.getByName(tenant), hints);
 	}
 }
