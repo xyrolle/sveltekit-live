@@ -9,7 +9,10 @@ Open screens learn that something changed and read it again through the app's ow
 import { follows } from "sveltekit-live";
 import { list, item } from "./todos.remote.ts";
 
-export const followed = [follows(list, "todo"), follows(item, { kind: "todo", by: "id" })];
+export const followed = [
+	follows(list, "todo"),
+	follows(item, { kind: "todo", id: (arg) => arg.id }),
+];
 ```
 
 ```ts
@@ -41,8 +44,8 @@ export const GET: RequestHandler = async ({ request, locals }) => {
 <!-- src/routes/+layout.svelte: one follower per tab -->
 <script>
 	import { followChanges } from "sveltekit-live/client";
-	import { followed } from "$lib/live.ts";
-	import { readAgain } from "$lib/live.remote.ts";
+	import { followed } from "#lib/live.ts";
+	import { readAgain } from "#lib/live.remote.ts";
 
 	followChanges({ socket: "/live", followed, readAgain });
 </script>
@@ -65,7 +68,7 @@ Kit replaces a remote module with stubs in the browser and allows only remote fu
 - the browser, to send with `.updates()` only the reads that follow a kind it was told;
 - the server, to decide for each instance the browser holds (`requested()`) whether its argument names a record it was told.
 
-So the app lists them in one module both sides import. `follows(read, ...what)` types `by` against the query's argument. A query missing from the list is simply not live.
+So the app lists them in one module both sides import. A read that follows one record names it with a function of its argument, `{ kind, id: (arg) => arg.id }`, typed by the query. A function, not a field name, because many queries take the id itself (`getPost(slug)`). A query missing from the list is simply not live.
 
 Rejected: a Vite plugin or code generation (the source app generates the list from its own procedure builder). A list is less machinery and reads like a route table.
 

@@ -7,7 +7,7 @@
 		"target": "es2024",
 		"lib": ["es2024", "dom"],
 		"module": "nodenext",
-		"types": ["node"],
+		"types": ["node", "@sveltejs/kit"],
 		"strict": true,
 		"noUncheckedIndexedAccess": true,
 		"exactOptionalPropertyTypes": true,
