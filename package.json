@@ -16,6 +16,10 @@
 		"./hub": {
 			"types": "./dist/hub.d.ts",
 			"default": "./dist/hub.js"
+		},
+		"./server": {
+			"types": "./dist/server.d.ts",
+			"default": "./dist/server.js"
 		}
 	},
 	"scripts": {

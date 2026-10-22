@@ -1,4 +1,5 @@
 import { WorkerEntrypoint } from "cloudflare:workers";
+import { connect } from "../../src/connect.ts";
 import type { Hint } from "../../src/hint.ts";
 import type { LiveHub } from "../../src/hub.ts";
 
@@ -19,10 +20,7 @@ export default class TestApp extends WorkerEntrypoint<Env> {
 		if (!tenant || !user) {
 			return new Response("Name a tenant and a user.", { status: 400 });
 		}
-		const hub = new URL("https://live-hub/");
-		hub.searchParams.set("user", user);
-		hub.searchParams.set("version", "build-1");
-		return this.env.LIVE.getByName(tenant).fetch(hub, request);
+		return connect(request, { hub: this.env.LIVE.getByName(tenant), user });
 	}
 
 	async publish(tenant: string, hints: Hint[]): Promise<void> {
