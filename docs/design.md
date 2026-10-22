@@ -40,17 +40,17 @@ export const GET = connect(async (event) => {
 ```svelte
 <!-- src/routes/+layout.svelte: one follower per tab -->
 <script>
-	import { follow } from "sveltekit-live/client";
+	import { followChanges } from "sveltekit-live/client";
 	import { followed } from "$lib/live.ts";
 	import { readAgain } from "$lib/live.remote.ts";
 
-	follow({ socket: "/live", followed, readAgain });
+	followChanges({ socket: "/live", followed, readAgain });
 </script>
 ```
 
 The Worker entry exports `LiveHub` from `sveltekit-live/hub`, bound as a Durable Object (`env.LIVE`).
 
-Public API: `follows`, `readAgainCommand`, `connect`, `follow`, `LiveHub`, and the `Hint` type.
+Public API: `follows`, `readAgainCommand`, `connect`, `followChanges`, `LiveHub`, and the `Hint` type.
 
 ## Decisions
 
@@ -91,7 +91,7 @@ Access is checked once, at the handshake. A socket outlives the session it was o
 
 ### The follower
 
-- `follow()` is called once in the root layout and opens one socket per tab.
+- `followChanges()` is called once in the root layout and opens one socket per tab.
 - **First hello:** the screen reads everything once. What was published between the page's render and the socket's acceptance reached no one, and nothing orders the two.
 - **Later hello (a reconnect):** if the series or the number moved on, it reads everything; otherwise nothing was missed.
 - **A publication whose number is not the last plus one:** it reads everything.
@@ -107,7 +107,7 @@ Access is checked once, at the handshake. A socket outlives the session it was o
 
 ### Development
 
-Durable Objects run only in the built Worker; adapter-cloudflare's `vite dev` has none. So `follow()` does nothing under `vite dev`; `wrangler dev` on the build runs the real path.
+Durable Objects run only in the built Worker; adapter-cloudflare's `vite dev` has none. So `followChanges()` does nothing under `vite dev`; `wrangler dev` on the build runs the real path.
 
 ### Packaging
 
