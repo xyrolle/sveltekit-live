@@ -35,7 +35,7 @@
 		"prepare": "pnpm build",
 		"check": "biome check .",
 		"typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.worker.json && pnpm --filter todos typecheck",
-		"test": "vitest run"
+		"test": "pnpm --filter todos build && vitest run"
 	},
 	"peerDependencies": {
 		"@sveltejs/kit": "^3.1.0",
@@ -46,6 +46,7 @@
 		"@cloudflare/workers-types": "5.20261021.1",
 		"@sveltejs/kit": "3.1.0",
 		"@types/node": "24.19.2",
+		"playwright": "1.64.1",
 		"svelte": "5.57.2",
 		"typescript": "7.0.2",
 		"vitest": "5.0.5",
