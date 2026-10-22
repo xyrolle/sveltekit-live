@@ -65,7 +65,7 @@ import { followed } from "./live.ts";
 export const readAgain = readAgainCommand(followed);
 ```
 
-**4. Commands publish what they changed**, once the write has committed, to the hub of the tenant they changed:
+**4. Commands publish what they changed.** A command refreshes its own screen's reads as any Kit command does; `publish` tells everyone else, once the write has committed, through the hub of the tenant it changed:
 
 ```ts
 // src/lib/todos.remote.ts
@@ -73,9 +73,12 @@ export const toggle = command(v.string(), async (id) => {
 	await env.DB.prepare("update todos set done = 1 - done where id = ?")
 		.bind(id)
 		.run();
+	await todo(id).refresh();
 	await publish(env.LIVE.getByName("board"), [{ kind: "todo", id }]);
 });
 ```
+
+The screen that ran the command hears its own hint too, and reads the change once more.
 
 **5. A route takes the sockets.** It decides who the user is and which tenant's hub they hear, or refuses with Kit's `error()`:
 
@@ -97,7 +100,7 @@ export const GET: RequestHandler = ({ request, locals }) =>
 </script>
 ```
 
-In the example, `pnpm build` and then `pnpm preview` (`wrangler dev`) run it.
+In the example, `pnpm dev` runs it under Vite, where each tab sees its own changes only. `pnpm build` and then `pnpm preview` (`wrangler dev`) run it live across tabs.
 
 ## API
 

@@ -25,9 +25,10 @@ export const todo = query(v.string(), async (id) => {
 	return { id: row.id, text: row.text, done: row.done === 1 };
 });
 
-// Each command tells the board's open screens what it changed, once its
-// write has committed. The example has one board; an app with tenants names
-// the hub of the tenant it changed.
+// Each command refreshes what it changed for its own screen, as any Kit
+// command does, and publishes it for the board's other screens once its
+// write has committed. The example has one board; an app with tenants
+// publishes to the hub of the tenant it changed.
 
 export const add = command(
 	v.pipe(v.string(), v.trim(), v.nonEmpty()),
@@ -37,6 +38,7 @@ export const add = command(
 		)
 			.bind(crypto.randomUUID(), text, Date.now())
 			.run();
+		await todos().refresh();
 		await publish(env.LIVE.getByName("board"), [{ kind: "todos" }]);
 	},
 );
@@ -45,5 +47,6 @@ export const toggle = command(v.string(), async (id) => {
 	await env.DB.prepare("update todos set done = 1 - done where id = ?")
 		.bind(id)
 		.run();
+	await todo(id).refresh();
 	await publish(env.LIVE.getByName("board"), [{ kind: "todo", id }]);
 });

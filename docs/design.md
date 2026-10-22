@@ -24,10 +24,11 @@ export const readAgain = readAgainCommand(followed);
 ```
 
 ```ts
-// src/routes/todos.remote.ts: a command says what it changed once its write commits
+// src/routes/todos.remote.ts: a command refreshes its own reads, and tells the others once its write commits
 export const add = command(v.string(), async (text) => {
 	const { tenant } = await signedIn();
 	const id = await insertTodo(tenant, text);
+	await list().refresh();
 	await publish(env.LIVE.getByName(tenant), [{ kind: "todo", id }]);
 });
 ```
@@ -74,7 +75,7 @@ Rejected: a Vite plugin or code generation (the source app generates the list fr
 
 ### A command publishes what it changed
 
-The command calls `publish(hub, hints)` with its tenant's hub after its write commits, a Durable Object RPC. A `changes()` wrapper around the handler was rejected: it would need the tenant, which only the handler knows, and a new record's id exists only after the write.
+A command refreshes its own screen's reads as any Kit command does. Then, after its write commits, it calls `publish(hub, hints)` with its tenant's hub, a Durable Object RPC that tells every other screen; the one that ran the command hears it too and reads once more. A `changes()` wrapper around the handler was rejected: it would need the tenant, which only the handler knows, and a new record's id exists only after the write.
 
 A hint for a write that rolled back costs one re-read. A hint never published (the Worker died between commit and publish) is lost, and nothing notices, as no number was taken. Publishing from an outbox fixes that and is the app's (follow-up).
 
@@ -113,7 +114,7 @@ Access is checked once, at the handshake. A socket outlives the session it was o
 
 ### Development
 
-Durable Objects run only in the built Worker; adapter-cloudflare's `vite dev` has none. So under `vite dev`, `publish` and `followChanges()` do nothing; `wrangler dev` on the build runs the real path.
+Durable Objects run only in the built Worker; adapter-cloudflare's `vite dev` has none. So under `vite dev`, `publish` and `followChanges()` do nothing, and an app's commands still refresh their own reads; `wrangler dev` on the build runs the real path.
 
 ### Packaging
 
