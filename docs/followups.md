@@ -46,7 +46,7 @@ Done when: a screen can name the reads it holds ahead, a hint drops them instead
 
 ## Something live under `vite dev`
 
-Durable Objects exist only in the built Worker, so under `vite dev` nothing is live, and the example runs on `wrangler dev` only.
+Durable Objects exist only in the built Worker, so under `vite dev` a tab sees its own changes only.
 
 Done when: under `vite dev` a tab reads everything again when it is shown again, tested in the browser.
 
