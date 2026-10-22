@@ -1,0 +1,25 @@
+// The library runs in two places: the browser and the Worker. Their global
+// types (the DOM's and the Workers runtime's) conflict, so each is checked as
+// its own program. This one is the browser's, with the tests that Node runs;
+// tsconfig.worker.json is the Worker's.
+{
+	"compilerOptions": {
+		"target": "es2024",
+		"lib": ["es2024", "dom"],
+		"module": "nodenext",
+		"types": ["node"],
+		"strict": true,
+		"noUncheckedIndexedAccess": true,
+		"exactOptionalPropertyTypes": true,
+		"noImplicitOverride": true,
+		"verbatimModuleSyntax": true,
+		"erasableSyntaxOnly": true,
+		"isolatedDeclarations": true,
+		"declaration": true,
+		"rewriteRelativeImportExtensions": true,
+		"skipLibCheck": true,
+		"noEmit": true
+	},
+	"include": ["src", "test"],
+	"exclude": ["src/hub.ts", "src/connect.ts", "src/server.ts", "test/worker"]
+}

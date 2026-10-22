@@ -1,0 +1,14 @@
+// Emits JavaScript and declarations for every entry in one pass. The two
+// typecheck programs have already checked it, and declarations need no
+// checking, as `isolatedDeclarations` has every export annotated.
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"noEmit": false,
+		"noCheck": true,
+		"rootDir": "src",
+		"outDir": "dist"
+	},
+	"include": ["src"],
+	"exclude": []
+}
