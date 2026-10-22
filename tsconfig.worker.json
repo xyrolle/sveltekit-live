@@ -5,6 +5,12 @@
 		"lib": ["es2024"],
 		"types": ["@cloudflare/workers-types", "@sveltejs/kit"]
 	},
-	"include": ["src/hub.ts", "src/connect.ts", "src/server.ts", "test/worker"],
+	"include": [
+		"src/hub.ts",
+		"src/connect.ts",
+		"src/read-again.ts",
+		"src/server.ts",
+		"test/worker"
+	],
 	"exclude": []
 }
