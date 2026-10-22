@@ -21,5 +21,11 @@
 		"noEmit": true
 	},
 	"include": ["src", "test"],
-	"exclude": ["src/hub.ts", "src/connect.ts", "src/server.ts", "test/worker"]
+	"exclude": [
+		"src/hub.ts",
+		"src/connect.ts",
+		"src/read-again.ts",
+		"src/server.ts",
+		"test/worker"
+	]
 }

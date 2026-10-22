@@ -22,3 +22,12 @@ export type Publication = { n: number; hints: Hint[] };
 /** The liveness check a screen sends, and the answer the hub gives without waking. */
 export const PING = "ping";
 export const PONG = "pong";
+
+/**
+ * What a screen was told since it last read again, by kind: `true` for the
+ * kind whole, or the ids of the records the hints named.
+ */
+export type Told = Record<string, true | string[]>;
+
+/** The most records a screen names for one kind; past it, it reads the kind whole. */
+export const TOLD_AT_MOST = 100;
