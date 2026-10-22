@@ -1,0 +1,21 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "sveltekit-live-todos",
+	// The adapter's Worker, with LiveHub added (worker.js).
+	"main": "worker.js",
+	"compatibility_date": "2026-10-01",
+	"compatibility_flags": ["nodejs_compat"],
+	"assets": { "binding": "ASSETS", "directory": ".svelte-kit/cloudflare" },
+	"durable_objects": {
+		"bindings": [{ "name": "LIVE", "class_name": "LiveHub" }]
+	},
+	"migrations": [{ "tag": "v1", "new_sqlite_classes": ["LiveHub"] }],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "todos",
+			"database_id": "local",
+			"migrations_dir": "migrations"
+		}
+	]
+}

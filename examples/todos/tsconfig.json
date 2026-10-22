@@ -1,0 +1,16 @@
+{
+	"extends": "$app/tsconfig",
+	"compilerOptions": {
+		"strict": true,
+		"noUncheckedIndexedAccess": true,
+		"exactOptionalPropertyTypes": true,
+		"verbatimModuleSyntax": true,
+		"skipLibCheck": true,
+		// worker.js re-exports the Worker the build writes, which a check before
+		// the build cannot find. It is the only JavaScript here.
+		"checkJs": false,
+		"types": ["$app/types", "./worker-configuration.d.ts"]
+	},
+	"include": ["src", "vite.config.ts"],
+	"exclude": ["src/service-worker"]
+}
