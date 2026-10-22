@@ -23,6 +23,7 @@ const server = createTestHarness({
 					bindings: [{ name: "LIVE", class_name: "LiveHub" }],
 				},
 				migrations: [{ tag: "v1", new_sqlite_classes: ["LiveHub"] }],
+				alias: { "$app/env": here("worker/app-env.ts") },
 			},
 		},
 	],
@@ -48,7 +49,7 @@ type Socket = NonNullable<
 	Awaited<ReturnType<typeof worker.fetch>>["webSocket"]
 >;
 
-/** Opens a screen's socket, keeping every frame but the pongs. */
+/** Opens a screen's socket through `connect`, keeping every frame but the pongs. */
 async function open(tenant: string, user: string) {
 	const response = await worker.fetch(
 		`${ORIGIN}/socket?tenant=${tenant}&user=${user}`,
@@ -160,5 +161,23 @@ describe("LiveHub", () => {
 		);
 		socket.send("hello");
 		expect(await closed).toBe(1008);
+	});
+});
+
+describe("connect", () => {
+	const socketRoute = `${ORIGIN}/socket?tenant=refusals&user=ana`;
+
+	it("refuses a request that is no WebSocket upgrade", async () => {
+		const response = await worker.fetch(socketRoute, {
+			headers: { origin: ORIGIN },
+		});
+		expect(response.status).toBe(426);
+	});
+
+	it("refuses a socket opened from another site", async () => {
+		const response = await worker.fetch(socketRoute, {
+			headers: { upgrade: "websocket", origin: "https://elsewhere.test" },
+		});
+		expect(response.status).toBe(403);
 	});
 });

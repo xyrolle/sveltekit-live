@@ -31,10 +31,10 @@ export const add = command(v.string(), async (text) => {
 
 ```ts
 // src/routes/live/+server.ts: who may open a socket, and to which tenant's hub
-export const GET = connect(async (event) => {
-	const { tenant, user } = await signedIn(event);
-	return { hub: env.LIVE.getByName(tenant), user };
-});
+export const GET: RequestHandler = async ({ request, locals }) => {
+	const { tenant, user } = signedIn(locals);
+	return connect(request, { hub: env.LIVE.getByName(tenant), user });
+};
 ```
 
 ```svelte
@@ -80,13 +80,15 @@ A hint for a write that rolled back costs one re-read. A hint never published (t
 - The app picks the tenant: it passes the stub (`getByName(tenant)`) to `connect` and calls `publish` on it. The library never sees a tenant id.
 - The hub holds its sockets with the WebSocket Hibernation API and answers pings without waking, so an idle tenant costs nothing.
 - It keeps a series id and the number of its last publication in its storage, so both survive eviction and deploys. Each publication is `{ n, hints }`, and every socket gets every number, even with none of its hints, so a screen can tell when it missed one.
-- **Who hears what.** `connect` hands the hub the user that `authorize` returned, and the hub tags the socket with it. A hint with `userId` reaches only that user's sockets; the others get the number with no hints. Every other hint reaches every socket on the hub: its kind and id are visible to every user connected there, as metadata, never data. An app whose users must not see each other's activity (staff and customers, say) uses one hub per audience, `` getByName(`${tenant}:staff`) ``, and publishes to each that should hear.
+- **Who hears what.** `connect` hands the hub the user the app names, and the hub tags the socket with it. A hint with `userId` reaches only that user's sockets; the others get the number with no hints. Every other hint reaches every socket on the hub: its kind and id are visible to every user connected there, as metadata, never data. An app whose users must not see each other's activity (staff and customers, say) uses one hub per audience, `` getByName(`${tenant}:staff`) ``, and publishes to each that should hear.
 - On each socket it takes, it says hello: `{ series, n, version }`. `version` is the build of the Worker that served the handshake: Kit's `version` from `$app/env` (the app's `version.name`, a timestamp of the build by default), which `connect` reads there and passes to the hub with the upgrade. The browser compares it with its own `version` from the same module.
 - The hub authorizes nothing. Sockets reach it only through `connect`; publications only through the app's binding.
 
 ### The socket route
 
-`connect(authorize)` returns the `GET` handler. It refuses a request that is not an upgrade (426) or comes from another origin (403: a browser sends cookies with a WebSocket handshake to any site and applies no CORS to it). Then it calls `authorize(event)`, which returns the hub and the user, or throws Kit's `error()` to refuse. It forwards the upgrade with the user and Kit's `version`.
+The app's own `GET` handler decides who the user is and which hub they hear, or refuses with Kit's `error()`, then calls `connect(request, { hub, user })`. It refuses a request that is not an upgrade (426) or comes from another origin (403: a browser sends cookies with a WebSocket handshake to any site and applies no CORS to it), and forwards the upgrade with the user and Kit's `version`.
+
+Rejected: `connect(authorize)` returning the handler. The callback did nothing the app's handler does not, and keeping Kit's full `RequestEvent` in it took a generic.
 
 Access is checked once, at the handshake. A socket outlives the session it was opened under until it closes; until then it hears hints, but no data (follow-up).
 
