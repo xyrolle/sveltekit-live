@@ -1,0 +1,40 @@
+{
+	"name": "sveltekit-live",
+	"version": "0.0.0",
+	"description": "Keep SvelteKit remote functions live across tabs and users on Cloudflare Workers, by invalidation.",
+	"license": "MIT",
+	"repository": "github:xyrolle/sveltekit-live",
+	"type": "module",
+	"packageManager": "pnpm@12.15.0",
+	"engines": {
+		"node": ">=24"
+	},
+	"files": [
+		"dist"
+	],
+	"exports": {
+		"./hub": {
+			"types": "./dist/hub.d.ts",
+			"default": "./dist/hub.js"
+		}
+	},
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
+		"prepare": "pnpm build",
+		"check": "biome check .",
+		"typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.worker.json",
+		"test": "vitest run"
+	},
+	"peerDependencies": {
+		"@sveltejs/kit": "^3.1.0"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.6.2",
+		"@cloudflare/workers-types": "5.20261021.1",
+		"@sveltejs/kit": "3.1.0",
+		"@types/node": "24.19.2",
+		"typescript": "7.0.2",
+		"vitest": "5.0.5",
+		"wrangler": "4.151.3"
+	}
+}

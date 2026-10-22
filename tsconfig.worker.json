@@ -1,0 +1,10 @@
+// What runs in the Worker: the hub, the server's functions and the test Worker.
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"lib": ["es2024"],
+		"types": ["@cloudflare/workers-types", "@sveltejs/kit"]
+	},
+	"include": ["src/hub.ts", "src/connect.ts", "src/server.ts", "test/worker"],
+	"exclude": []
+}
