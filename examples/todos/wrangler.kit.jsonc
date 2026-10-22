@@ -1,0 +1,7 @@
+// What adapter-cloudflare reads: it writes its Worker to this `main`, and
+// has no option for a Worker's other exports. wrangler.jsonc runs worker.js
+// instead, which adds LiveHub to that Worker.
+{
+	"main": ".svelte-kit/kit-worker.js",
+	"assets": { "binding": "ASSETS", "directory": ".svelte-kit/cloudflare" }
+}
