@@ -8,12 +8,6 @@ A session that ends on its own (it expires) gives the app no moment to call `dis
 
 Done when: a socket closes once the session it was opened under has expired, with no call from the app, tested in workerd.
 
-## Publish every committed change
-
-A command publishes after its write commits. If the Worker dies in between, the change is never told and no screen notices, as no number was taken.
-
-Done when: the README shows publishing from a transactional outbox, with a test that a publication lost before the hub took it is sent again.
-
 ## Say when a screen may be stale
 
 While the socket is down, or after a read-again failed, a screen shows what it read last and does not say so.

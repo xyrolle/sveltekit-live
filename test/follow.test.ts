@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import type { D1Database } from "@cloudflare/workers-types";
 import {
 	type Browser,
 	chromium,
@@ -77,6 +78,21 @@ async function tick(page: Page, text: string) {
 const shownDone = (page: Page, text: string) =>
 	page.getByRole("checkbox", { name: text, checked: true }).waitFor();
 
+/** The example's database, as the test reaches it from outside the Worker. */
+async function database(): Promise<D1Database> {
+	return (await app.getWorker<{ DB: D1Database }>().getEnv()).DB;
+}
+
+/** The id of the todo of `text`. */
+async function idOf(text: string): Promise<string> {
+	const row = await (await database())
+		.prepare("select id from todos where text = ?")
+		.bind(text)
+		.first<{ id: string }>();
+	if (!row) throw new Error(`No todo "${text}".`);
+	return row.id;
+}
+
 const closeAll = (...pages: Page[]) =>
 	Promise.all(pages.map((page) => page.context().close()));
 
@@ -143,6 +159,26 @@ describe("followChanges", { timeout: 15_000 }, () => {
 
 		await shownDone(bob, "Book the dentist");
 		await closeAll(ana, bob);
+	});
+
+	it("publishes, once the cron runs, what a command committed but did not get to publish", async () => {
+		const bob = await openScreen();
+		await add(bob, "Pay the rent");
+
+		// What a Worker that died between its commit and its publication leaves:
+		// the change, and its hints in the outbox.
+		const id = await idOf("Pay the rent");
+		const db = await database();
+		await db.batch([
+			db.prepare("update todos set done = 1 where id = ?").bind(id),
+			db
+				.prepare("insert into outbox (id, hints) values (?, ?)")
+				.bind(crypto.randomUUID(), JSON.stringify([{ kind: "todo", id }])),
+		]);
+		await app.getWorker().scheduled({ cron: "* * * * *" });
+
+		await shownDone(bob, "Pay the rent");
+		await closeAll(bob);
 	});
 
 	it("has Kit check for a newer build when the hub's hello names one", async () => {

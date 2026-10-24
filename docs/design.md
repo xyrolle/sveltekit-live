@@ -86,7 +86,9 @@ Rejected:
 
 A command refreshes its own screen's reads as any Kit command does. Then, after its write commits, it calls `publish(hub, hints)` with its tenant's hub, a Durable Object RPC that tells every other screen; the one that ran the command hears it too and reads once more. A `changes()` wrapper around the handler was rejected: it would need the tenant, which only the handler knows, and a new record's id exists only after the write.
 
-A hint for a write that rolled back costs one re-read. A hint never published (the Worker died between commit and publish) is lost, and nothing notices, as no number was taken. Publishing from an outbox fixes that and is the app's (follow-up).
+A hint for a write that rolled back costs one re-read. A hint never published (the Worker died between commit and publish) would be lost, and nothing would notice, as no number was taken. So an app publishes from an outbox: it writes the hints in the transaction of the change, publishes them, then deletes them, and a cron publishes what a Worker that died left. A hint published twice costs one more read. The outbox is the app's, as only the app's database shares the change's transaction; the example's is a D1 table, written in the change's `batch`.
+
+Rejected: an outbox in the library, which would own a table in whatever database the app has.
 
 ### One hub per tenant, numbering its publications
 
@@ -145,7 +147,6 @@ Kit's remote functions are still experimental, so the app enables `experimental.
 What comes after this core goes in `docs/followups.md`:
 
 - closing the sockets of a session that expired on its own;
-- an outbox, so a committed change is always published;
 - a stale notice with Retry while the socket is down or a read failed;
 - re-reading a read whose own refresh failed on the server, beside its command that succeeded;
 - one ordered line shared by the follower and the page's own refreshes;

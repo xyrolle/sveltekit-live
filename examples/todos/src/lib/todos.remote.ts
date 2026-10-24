@@ -1,8 +1,8 @@
 import { env } from "cloudflare:workers";
 import { error } from "@sveltejs/kit";
-import { publish } from "sveltekit-live/server";
 import * as v from "valibot";
 import { command, query } from "$app/server";
+import { commit } from "./server/outbox.ts";
 
 type Row = { id: string; text: string; done: number };
 
@@ -25,28 +25,28 @@ export const todo = query(v.string(), async (id) => {
 	return { id: row.id, text: row.text, done: row.done === 1 };
 });
 
-// Each command refreshes what it changed for its own screen, as any Kit
-// command does, and publishes it for the board's other screens once its
-// write has committed. The example has one board; an app with tenants
-// publishes to the hub of the tenant it changed.
+// Each command commits its write with the hints that tell the board's other
+// screens of it (#lib/server/outbox.ts), and refreshes what it changed for its
+// own screen, as any Kit command does. The example has one board; an app with
+// tenants publishes to the hub of the tenant it changed.
 
 export const add = command(
 	v.pipe(v.string(), v.trim(), v.nonEmpty()),
 	async (text) => {
-		await env.DB.prepare(
-			"insert into todos (id, text, created) values (?, ?, ?)",
-		)
-			.bind(crypto.randomUUID(), text, Date.now())
-			.run();
+		await commit(
+			env.DB.prepare(
+				"insert into todos (id, text, created) values (?, ?, ?)",
+			).bind(crypto.randomUUID(), text, Date.now()),
+			[{ kind: "todos" }],
+		);
 		await todos().refresh();
-		await publish(env.LIVE.getByName("board"), [{ kind: "todos" }]);
 	},
 );
 
 export const toggle = command(v.string(), async (id) => {
-	await env.DB.prepare("update todos set done = 1 - done where id = ?")
-		.bind(id)
-		.run();
+	await commit(
+		env.DB.prepare("update todos set done = 1 - done where id = ?").bind(id),
+		[{ kind: "todo", id }],
+	);
 	await todo(id).refresh();
-	await publish(env.LIVE.getByName("board"), [{ kind: "todo", id }]);
 });
