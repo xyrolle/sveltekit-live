@@ -24,6 +24,7 @@
 	"exclude": [
 		"src/hub.ts",
 		"src/connect.ts",
+		"src/disconnect.ts",
 		"src/publish.ts",
 		"src/read-again.ts",
 		"src/server.ts",

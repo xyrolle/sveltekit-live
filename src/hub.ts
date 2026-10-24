@@ -68,6 +68,17 @@ export class LiveHub extends DurableObject<unknown> {
 		}
 	}
 
+	/**
+	 * Closes every socket of `user`, who hears nothing more. Each of their
+	 * screens reconnects, and the app's socket route admits it again only if
+	 * it still would.
+	 */
+	disconnect(user: string): void {
+		for (const socket of this.ctx.getWebSockets(user)) {
+			socket.close(1008, "Closed by the app: reconnect to be admitted again.");
+		}
+	}
+
 	/** A screen only listens; anything it says but a ping is a mistake. */
 	override webSocketMessage(socket: WebSocket): void {
 		socket.close(1008, "A LiveHub socket only delivers hints.");
