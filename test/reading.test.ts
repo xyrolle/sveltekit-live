@@ -85,4 +85,27 @@ describe("readingOf", () => {
 		await settle();
 		expect(sent).toEqual([{ todo: ["a"] }, { todo: ["a"] }]);
 	});
+
+	it("lets the next read go once one has had no answer for 15 s, with what that one was told", async () => {
+		const { reading, sent } = screen();
+		reading.tell("todo", "a");
+		await settle();
+		reading.tell("todo", "b");
+		await vi.advanceTimersByTimeAsync(14_999);
+		expect(sent).toHaveLength(1);
+
+		await vi.advanceTimersByTimeAsync(1);
+		expect(sent).toEqual([{ todo: ["a"] }, { todo: ["b", "a"] }]);
+	});
+
+	it("reads again what a read was told when its answer lands after the bound", async () => {
+		const { reading, sent, answers } = screen();
+		reading.tell("todo", "a");
+		await vi.advanceTimersByTimeAsync(15_000);
+		expect(sent).toHaveLength(1);
+
+		answers[0]?.resolve();
+		await settle();
+		expect(sent).toEqual([{ todo: ["a"] }, { todo: ["a"] }]);
+	});
 });

@@ -26,12 +26,6 @@ A read-again command that succeeds can carry a read whose refresh failed on the 
 
 Done when: `readAgain` answers with the kinds of the reads that failed, the follower keeps them as it keeps a failed command, and a browser test shows the read recover once the socket is back.
 
-## Bound a read-again that never answers
-
-One read-again is on its way at a time. A request the network holds without an answer holds every read after it.
-
-Done when: a read-again with no answer within a bound lets the next one go, and the late answer cannot replace a newer one, tested in the browser.
-
 ## Keep a page's own refreshes in line with the follower's
 
 A page that refreshes a read itself while the follower's read-again is on its way can show the older answer until the next hint.
