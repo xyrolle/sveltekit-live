@@ -11,11 +11,17 @@ import type { LiveHub } from "./hub.ts";
  *     };
  *
  * The hub learns the user, for hints meant for them alone, and this Worker's
- * build (Kit's `version`), for screens of an older one to learn of it.
+ * build (Kit's `version`), for screens of an older one to learn of it. Given
+ * when the user's session `expires`, it closes the socket then, and the
+ * screen reconnects to be admitted again, or refused.
  */
 export async function connect(
 	request: Request,
-	{ hub, user }: { hub: DurableObjectStub<LiveHub>; user: string },
+	{
+		hub,
+		user,
+		expires,
+	}: { hub: DurableObjectStub<LiveHub>; user: string; expires?: Date },
 ): Promise<Response> {
 	if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
 		return new Response("Expected a WebSocket upgrade.", {
@@ -33,6 +39,7 @@ export async function connect(
 	const url = new URL("https://live-hub/");
 	url.searchParams.set("user", user);
 	url.searchParams.set("version", version);
+	if (expires) url.searchParams.set("expires", String(expires.getTime()));
 	const accepted = await hub.fetch(url, { headers: { upgrade: "websocket" } });
 	if (!accepted.webSocket) {
 		throw new Error(

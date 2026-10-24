@@ -5,6 +5,9 @@ import { type Hello, type Hint, PING, PONG, type Publication } from "./hint.ts";
 const SERIES = "series";
 const PUBLISHED = "published";
 
+/** What a socket carries through hibernation: when its session expires (epoch ms). */
+type Session = { expires: number };
+
 /**
  * One tenant's open screens, reached by the tenant's name
  * (`env.LIVE.getByName(tenant)`). It holds their sockets through the
@@ -13,7 +16,8 @@ const PUBLISHED = "published";
  * that it missed a publication, across evictions and deploys alike.
  *
  * It authorizes nothing: sockets reach it only through `connect`, and
- * publications only through the app's own binding.
+ * publications only through the app's own binding. It closes a socket once
+ * the session it was opened under expires, with one alarm at the earliest.
  */
 export class LiveHub extends DurableObject<unknown> {
 	constructor(ctx: DurableObjectState, env: unknown) {
@@ -23,11 +27,15 @@ export class LiveHub extends DurableObject<unknown> {
 		);
 	}
 
-	/** Takes a screen's socket from `connect`, tagged with its user, and says hello. */
-	override fetch(request: Request): Response {
+	/**
+	 * Takes a screen's socket from `connect`, tagged with its user, keeping
+	 * when its session expires, and says hello.
+	 */
+	override async fetch(request: Request): Promise<Response> {
 		const url = new URL(request.url);
 		const user = url.searchParams.get("user");
 		const version = url.searchParams.get("version");
+		const expires = url.searchParams.get("expires");
 		if (request.headers.get("upgrade") !== "websocket" || !user || !version) {
 			return new Response("A LiveHub takes sockets from connect() only.", {
 				status: 400,
@@ -35,6 +43,11 @@ export class LiveHub extends DurableObject<unknown> {
 		}
 		const { 0: client, 1: server } = new WebSocketPair();
 		this.ctx.acceptWebSocket(server, [user]);
+		if (expires !== null) {
+			const session: Session = { expires: Number(expires) };
+			server.serializeAttachment(session);
+			await this.alarmBy(session.expires);
+		}
 		server.send(
 			JSON.stringify({ ...this.standing(), version } satisfies Hello),
 		);
@@ -79,6 +92,33 @@ export class LiveHub extends DurableObject<unknown> {
 		}
 	}
 
+	/** Closes the sockets whose session has expired, and sets the alarm for the next. */
+	override async alarm(): Promise<void> {
+		const now = Date.now();
+		let next: number | undefined;
+		for (const socket of this.ctx.getWebSockets()) {
+			const expires = expiryOf(socket);
+			if (expires === undefined || socket.readyState !== WebSocket.OPEN) {
+				continue;
+			}
+			if (expires <= now) {
+				socket.close(
+					1008,
+					"The session expired: reconnect to be admitted again.",
+				);
+			} else {
+				next = Math.min(next ?? expires, expires);
+			}
+		}
+		if (next !== undefined) await this.ctx.storage.setAlarm(next);
+	}
+
+	/** Sets the alarm for `time`, unless it goes off sooner already. */
+	private async alarmBy(time: number): Promise<void> {
+		const set = await this.ctx.storage.getAlarm();
+		if (set === null || set > time) await this.ctx.storage.setAlarm(time);
+	}
+
 	/** A screen only listens; anything it says but a ping is a mistake. */
 	override webSocketMessage(socket: WebSocket): void {
 		socket.close(1008, "A LiveHub socket only delivers hints.");
@@ -93,4 +133,15 @@ export class LiveHub extends DurableObject<unknown> {
 		const n = kv.get(PUBLISHED);
 		return { series, n: typeof n === "number" ? n : 0 };
 	}
+}
+
+/** When the session a socket was opened under expires, if `connect` was told. */
+function expiryOf(socket: WebSocket): number | undefined {
+	const session: unknown = socket.deserializeAttachment();
+	return typeof session === "object" &&
+		session !== null &&
+		"expires" in session &&
+		typeof session.expires === "number"
+		? session.expires
+		: undefined;
 }

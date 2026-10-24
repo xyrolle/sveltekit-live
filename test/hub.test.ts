@@ -54,10 +54,14 @@ type Socket = NonNullable<
 	Awaited<ReturnType<typeof worker.fetch>>["webSocket"]
 >;
 
-/** Opens a screen's socket through `connect`, keeping every frame but the pongs. */
-async function open(tenant: string, user: string) {
+/**
+ * Opens a screen's socket through `connect`, for a session that `expires` at
+ * that time (epoch ms) or never, keeping every frame but the pongs.
+ */
+async function open(tenant: string, user: string, expires?: number) {
+	const session = expires === undefined ? "" : `&expires=${expires}`;
 	const response = await worker.fetch(
-		`${ORIGIN}/socket?tenant=${tenant}&user=${user}`,
+		`${ORIGIN}/socket?tenant=${tenant}&user=${user}${session}`,
 		{ headers: { upgrade: "websocket", origin: ORIGIN } },
 	);
 	const socket = response.webSocket;
@@ -185,6 +189,43 @@ describe("LiveHub", () => {
 		expect(publications(bob.frames)).toEqual([
 			{ n: 1, hints: [{ kind: "todo" }] },
 		]);
+	});
+
+	it("closes a socket once its session has expired, and keeps the others", async () => {
+		const expiring = await open("expiry", "ana", Date.now() + 300);
+		const live = await open("expiry", "bob");
+		// workerd ends a hibernated socket that has sent no frame ten seconds
+		// after closing it (cloudflare/workerd#7566); a screen's pings are frames.
+		for (const { socket } of [expiring, live]) await caughtUp(socket);
+		expect(await closed(expiring.socket)).toBe(1008);
+
+		await publish("expiry", [{ kind: "todo" }]);
+		await caughtUp(live.socket);
+		expect(publications(expiring.frames)).toEqual([]);
+		expect(publications(live.frames)).toEqual([
+			{ n: 1, hints: [{ kind: "todo" }] },
+		]);
+	});
+
+	it("closes each socket at its own session's expiry", async () => {
+		const sooner = await open("expiries", "ana", Date.now() + 200);
+		const later = await open("expiries", "bob", Date.now() + 1_500);
+		for (const { socket } of [sooner, later]) await caughtUp(socket);
+
+		expect(await closed(sooner.socket)).toBe(1008);
+		expect(await closed(later.socket)).toBe(1008);
+	});
+
+	it("closes a socket at its session's expiry across hibernation", async () => {
+		const ana = await open("expiry-hibernation", "ana", Date.now() + 500);
+		await caughtUp(ana.socket);
+		const code = closed(ana.socket);
+		await worker.evictDurableObject("LIVE", {
+			name: "expiry-hibernation",
+			webSockets: "hibernate",
+		});
+
+		expect(await code).toBe(1008);
 	});
 
 	it("closes a socket that says anything but a ping", async () => {
