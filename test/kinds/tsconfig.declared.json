@@ -1,0 +1,13 @@
+// The app with its kinds declared (kinds.d.ts); tsconfig.undeclared.json has it without.
+{
+	"extends": "../../tsconfig.worker.json",
+	"compilerOptions": {
+		"paths": {
+			"sveltekit-live": ["../../src/index.ts"],
+			"sveltekit-live/hub": ["../../src/hub.ts"],
+			"sveltekit-live/server": ["../../src/server.ts"]
+		}
+	},
+	"include": [],
+	"files": ["app.ts", "kinds.d.ts"]
+}

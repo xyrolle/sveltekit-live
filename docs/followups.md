@@ -50,12 +50,6 @@ Durable Objects exist only in the built Worker, so under `vite dev` a tab sees i
 
 Done when: under `vite dev` a tab reads everything again when it is shown again, tested in the browser.
 
-## Typed kinds
-
-Kinds are strings: a misspelled kind in `follows` or `publish` is never heard.
-
-Done when: an app declares its kinds once, and a misspelled kind fails `pnpm typecheck`.
-
 ## The example on TypeScript 7
 
 SvelteKit 3.1 reads `tsconfig.json` through TypeScript's JavaScript API, which TypeScript 7 does not have, and svelte-check needs it too. The example uses TypeScript 6; the library is checked with TypeScript 7.

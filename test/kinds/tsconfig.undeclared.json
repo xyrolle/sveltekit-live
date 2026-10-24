@@ -1,0 +1,4 @@
+{
+	"extends": "./tsconfig.declared.json",
+	"files": ["app.ts"]
+}

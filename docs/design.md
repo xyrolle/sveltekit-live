@@ -54,7 +54,7 @@ export const GET: RequestHandler = async ({ request, locals }) => {
 
 The Worker entry exports `LiveHub` from `sveltekit-live/hub`, bound as a Durable Object (`env.LIVE`).
 
-Public API: `follows`, `readAgainCommand`, `connect`, `disconnect`, `publish`, `followChanges`, `LiveHub`, and the `Hint` type.
+Public API: `follows`, `readAgainCommand`, `connect`, `disconnect`, `publish`, `followChanges`, `LiveHub`, and the `Hint` and `Register` types.
 
 ## Decisions
 
@@ -72,6 +72,15 @@ Kit replaces a remote module with stubs in the browser and allows only remote fu
 So the app lists them in one module both sides import. A read that follows one record names it with a function of its argument, `{ kind, id: (arg) => arg.id }`, typed by the query. A function, not a field name, because many queries take the id itself (`getPost(slug)`). A query missing from the list is simply not live.
 
 Rejected: a Vite plugin or code generation (the source app generates the list from its own procedure builder). A list is less machinery and reads like a route table.
+
+### Kinds are declared once, as a type
+
+The app declares the union of its kinds once, in `app.d.ts`, by extending the `Register` interface of `sveltekit-live`. `follows`, `publish` and `Hint` take only those kinds, so a misspelled one fails the app's typecheck where it is written, and the error lists the kinds declared. An app that declares none takes any string, with nothing to write. Nothing checks kinds at runtime: the wire carries strings, and a hint of a kind that no read follows reads nothing.
+
+Rejected:
+
+- a runtime list of kinds: it would have to reach `follows`, `publish`, `readAgainCommand` and `followChanges`, or a factory would make them, for a check the compiler already makes;
+- no kinds at all until declared (`never`): an app's first `follows` would fail before it had a reason to declare anything.
 
 ### A command publishes what it changed
 
@@ -141,5 +150,4 @@ What the source app does beyond this core goes in `docs/followups.md`:
 - re-reading a read whose own refresh failed on the server, beside its command that succeeded;
 - one ordered line shared by the follower and the page's own refreshes;
 - dropping data a screen read ahead (the next week) instead of reading it again;
-- re-reading when a tab is shown again under `vite dev`;
-- typed kinds declared once by the app.
+- re-reading when a tab is shown again under `vite dev`.
