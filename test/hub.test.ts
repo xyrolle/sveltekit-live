@@ -246,6 +246,15 @@ describe("connect", () => {
 		expect(response.status).toBe(426);
 	});
 
+	it("refuses an expiry that is no date, saying what to pass", async () => {
+		const opening = worker.fetch(`${socketRoute}&expires=never`, {
+			headers: { upgrade: "websocket", origin: ORIGIN },
+		});
+		await expect(opening).rejects.toThrow(
+			"connect() was given expires: Invalid Date. Pass when the user's session expires, as a valid Date.",
+		);
+	});
+
 	it("refuses a socket opened from another site", async () => {
 		const response = await worker.fetch(socketRoute, {
 			headers: { upgrade: "websocket", origin: "https://elsewhere.test" },
