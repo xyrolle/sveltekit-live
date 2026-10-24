@@ -89,7 +89,15 @@ export async function commit(change: D1PreparedStatement, hints: Hint[]) {
 			JSON.stringify(hints),
 		),
 	]);
-	await publish(env.LIVE.getByName("board"), hints);
+	try {
+		await publish(env.LIVE.getByName("board"), hints);
+	} catch (failure) {
+		console.error(
+			`Publishing the hints of outbox row ${kept} failed; the cron publishes them.`,
+			failure,
+		);
+		return;
+	}
 	await env.DB.prepare("delete from outbox where id = ?").bind(kept).run();
 }
 ```
@@ -105,7 +113,7 @@ export const toggle = command(v.string(), async (id) => {
 });
 ```
 
-A Cron Trigger, every minute, publishes what a Worker that died left in the outbox. It calls the hub itself, as `publish` is compiled with the app by Vite and Wrangler bundles the Worker's entry. A publication sent twice (the Worker died after the hub had it) costs each screen one more read.
+A command whose publication fails still succeeds, as its change did: the hints wait in the outbox. A Cron Trigger, every minute, publishes what the outbox holds, whether the hub refused it or the Worker died. It calls the hub itself, as `publish` is compiled with the app by Vite and Wrangler bundles the Worker's entry. A publication sent twice (the Worker died after the hub had it) costs each screen one more read.
 
 ```js
 // worker.js
