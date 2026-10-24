@@ -8,6 +8,7 @@ import {
 } from "playwright";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createTestHarness, experimental_readRawConfig } from "wrangler";
+import type { Hint } from "../src/hint.ts";
 
 const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
@@ -94,7 +95,12 @@ const readsAgain = (page: Page) =>
 /** The example's bindings, as the test reaches them from outside the Worker. */
 type Env = {
 	DB: D1Database;
-	LIVE: { getByName(name: string): { refuseNext(): Promise<void> } };
+	LIVE: {
+		getByName(name: string): {
+			publish(hints: Hint[]): Promise<void>;
+			refuseNext(): Promise<void>;
+		};
+	};
 };
 
 /** The example's database. */
@@ -259,6 +265,41 @@ describe("followChanges", { timeout: 15_000 }, () => {
 		await deliverLate();
 		await again;
 		await shownDone(bob, "Feed the cat", false);
+		await closeAll(ana, bob);
+	});
+
+	it("reads again, once the socket is back, a read that failed on the server", async () => {
+		const ana = await openScreen();
+		const sockets: WebSocketRoute[] = [];
+		const bob = await openScreen((page) =>
+			page.routeWebSocket(/\/live$/, (socket) => {
+				sockets.push(socket);
+				socket.connectToServer();
+			}),
+		);
+		await add(ana, "Call mum");
+		await bob.getByLabel("Call mum").waitFor();
+
+		// The todo is done, but no read of it succeeds until its table is back.
+		const id = await idOf("Call mum");
+		const db = await database();
+		await db.batch([
+			db.prepare("update todos set done = 1 where id = ?").bind(id),
+			db.prepare("alter table todos rename to todos_away"),
+		]);
+		try {
+			const failed = readsAgain(bob);
+			const { LIVE } = await app.getWorker<Env>().getEnv();
+			await LIVE.getByName("board").publish([{ kind: "todo", id }]);
+			await failed;
+		} finally {
+			await db.prepare("alter table todos_away rename to todos").run();
+		}
+
+		const recovered = readsAgain(bob);
+		await sockets[0]?.close();
+		await recovered;
+		await shownDone(bob, "Call mum");
 		await closeAll(ana, bob);
 	});
 

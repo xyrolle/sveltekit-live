@@ -1,10 +1,10 @@
-import { error } from "@sveltejs/kit";
+import { error, isHttpError } from "@sveltejs/kit";
 import { command, type RemoteCommand, requested } from "$app/server";
 import type { Followed } from "./follows.ts";
-import { TOLD_AT_MOST, type Told } from "./hint.ts";
+import { type Heard, TOLD_AT_MOST, type Told, toldOf } from "./hint.ts";
 
-/** What a screen was told, checked: each kind whole (`true`), or the records named. */
-type Heard = Map<string, true | Set<string>>;
+/** One thing a read follows. */
+type Follow = Followed["follows"][number];
 
 /**
  * The one command through which open screens read again what they were
@@ -15,33 +15,57 @@ type Heard = Map<string, true | Set<string>>;
  * A screen sends what it was told, and Kit sends along every instance it
  * holds of the reads that follow it, with its argument. Each instance that
  * heard a hint is refreshed through its own query, with whatever checks the
- * query makes; the others keep their answers. The command has no guard of
- * its own, as it reads nothing itself.
+ * query makes; the others keep their answers. The command answers with what
+ * it could not read in: the kinds, or records, of the reads that failed. It
+ * has no guard of its own, as it reads nothing itself.
  */
 export function readAgainCommand(
 	followed: readonly Followed[],
-): RemoteCommand<Told, void> {
+): RemoteCommand<Told, Told> {
 	return command("unchecked", async (told: Told) => {
 		const heard = heardOf(told);
+		const unread: Heard = new Map();
+		const reads: Promise<unknown>[] = [];
 		for (const { read, follows } of followed) {
 			// Asynchronous, as a query's schema may validate its argument so.
 			for await (const { arg, query, ignore } of requested(read, Infinity)) {
-				if (follows.some((follow) => isHeard(follow, heard, arg))) {
-					// Kit awaits the refresh and sends it with the command's answer.
-					void query.refresh();
-				} else {
+				const hearing = follows.filter((follow) => isHeard(follow, heard, arg));
+				if (hearing.length === 0) {
 					ignore();
+					continue;
 				}
+				void query.refresh();
+				// Awaited here, to learn whether it failed; Kit sends this same
+				// answer with the command's.
+				reads.push(
+					query.catch((failure: unknown) => {
+						if (isAnswer(failure)) return;
+						for (const follow of hearing) keep(unread, follow, arg);
+					}),
+				);
 			}
 		}
+		await Promise.all(reads);
+		return toldOf(unread);
 	});
 }
 
-function isHeard(
-	follow: Followed["follows"][number],
-	heard: Heard,
-	arg: unknown,
-): boolean {
+/** A refusal (4xx) is the read's own answer, such as a record since deleted, not a failure. */
+const isAnswer = (failure: unknown): boolean =>
+	isHttpError(failure) && failure.status < 500;
+
+/** Keeps what a failed read of `arg` heard, to be read again: its kind whole, or its record. */
+function keep(unread: Heard, follow: Follow, arg: unknown): void {
+	if (typeof follow === "string") {
+		unread.set(follow, true);
+		return;
+	}
+	const ids = unread.get(follow.kind) ?? new Set<string>();
+	if (ids === true) return;
+	unread.set(follow.kind, ids.add(follow.id(arg)));
+}
+
+function isHeard(follow: Follow, heard: Heard, arg: unknown): boolean {
 	if (typeof follow === "string") return heard.has(follow);
 	const ids = heard.get(follow.kind);
 	return ids === true || (ids?.has(follow.id(arg)) ?? false);

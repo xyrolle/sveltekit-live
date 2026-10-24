@@ -20,12 +20,6 @@ While the socket is down, or after a read-again failed, a screen shows what it r
 
 Done when: `followChanges` exposes whether the screen may be out of date and since when, with a Retry, and the example shows it.
 
-## Read again a read whose own refresh failed
-
-A read-again command that succeeds can carry a read whose refresh failed on the server. That read shows its error until a hint of its kind comes.
-
-Done when: `readAgain` answers with the kinds of the reads that failed, the follower keeps them as it keeps a failed command, and a browser test shows the read recover once the socket is back.
-
 ## Keep a page's own refreshes in line with the follower's
 
 A page that refreshes a read itself while the follower's read-again is on its way can show the older answer until the next hint.

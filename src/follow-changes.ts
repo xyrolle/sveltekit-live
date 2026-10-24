@@ -31,7 +31,7 @@ export function followChanges(options: Options): void {
 type Options = {
 	socket: string;
 	followed: readonly Followed[];
-	readAgain: RemoteCommand<Told, void>;
+	readAgain: RemoteCommand<Told, Told>;
 };
 
 function follow({ socket, followed, readAgain }: Options): () => void {
@@ -44,7 +44,7 @@ function follow({ socket, followed, readAgain }: Options): () => void {
 			.map(({ read }) => read);
 		return reads.length > 0
 			? readAgain(told).updates(...reads)
-			: Promise.resolve();
+			: Promise.resolve({});
 	});
 	const readEverything = () => {
 		for (const kind of kinds) reading.tell(kind);
