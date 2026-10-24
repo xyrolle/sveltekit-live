@@ -23,6 +23,11 @@ export async function connect(
 		expires,
 	}: { hub: DurableObjectStub<LiveHub>; user: string; expires?: Date },
 ): Promise<Response> {
+	if (expires && Number.isNaN(expires.getTime())) {
+		throw new TypeError(
+			`connect() was given expires: ${String(expires)}. Pass when the user's session expires, as a valid Date.`,
+		);
+	}
 	if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
 		return new Response("Expected a WebSocket upgrade.", {
 			status: 426,
