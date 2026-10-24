@@ -189,7 +189,7 @@ A read that fails on the server is read again with the next hint of its kind, or
 <input type="checkbox" checked={item.done} onchange={() => inTurn(() => toggle(id))} />
 ```
 
-In the example, `pnpm dev` runs it under Vite, where each tab sees its own changes only. `pnpm build` and then `pnpm preview` (`wrangler dev`) run it live across tabs.
+In the example, `pnpm dev` runs it under Vite, where a tab sees another's changes once it is shown again. `pnpm build` and then `pnpm preview` (`wrangler dev`) run it live across tabs.
 
 ## API
 
@@ -200,14 +200,14 @@ In the example, `pnpm dev` runs it under Vite, where each tab sees its own chang
 - **`readAgainCommand(followed)`** (`sveltekit-live/server`): the command that screens read again through. Each read refreshes through its own query and that query's checks; the command has no guard of its own. It answers with the kinds and records of the reads that failed, which the screen keeps to read again. A refusal (4xx) is a read's own answer, not a failure.
 - **`connect(request, { hub, user })`** (`sveltekit-live/server`): hands the socket to `hub`, for `user`. It answers 426 to a request that is no WebSocket upgrade, and 403 to one from another origin.
 - **`disconnect(hub, user)`** (`sveltekit-live/server`): closes every socket of `user` on `hub`: none of them hears anything more. Each screen reconnects, and one the socket route refuses keeps retrying, as after any lost connection. Under `vite dev` it does nothing.
-- **`followChanges({ socket, followed, readAgain })`** (`sveltekit-live/client`): called once, in the root layout. It opens one socket per tab, to the route at `socket`, and answers with the screen's `Freshness`.
+- **`followChanges({ socket, followed, readAgain })`** (`sveltekit-live/client`): called once, in the root layout. It opens one socket per tab, to the route at `socket`, and answers with the screen's `Freshness`. Under `vite dev` it opens none, and reads everything again whenever the tab is shown again.
 - **`Freshness`** (`sveltekit-live/client`): `staleSince`, since when the screen may be out of date, once that has lasted 15 s, or `undefined` while it is current (reactive); and `retry()`, which reconnects at once if the socket is down and reads again what failed. Under `vite dev` it is always current.
-- **`inTurn(work)`** (`sveltekit-live/client`): runs a command after the follower's read on its way, and holds the follower's next read until it lands. It waits for that read 15 s at most. Without a follower (under `vite dev`), it runs the command at once.
+- **`inTurn(work)`** (`sveltekit-live/client`): runs a command after the follower's read on its way, and holds the follower's next read until it lands. It waits for that read 15 s at most. Before the root layout has mounted the follower, it runs the command at once.
 - **`LiveHub`** (`sveltekit-live/hub`): the Durable Object that holds a tenant's sockets.
 
 ## Limitations
 
-- Changes from other tabs and users need the built Worker: under `vite dev` there are no Durable Objects, so `publish` and `followChanges` do nothing. Build, then run `wrangler dev`.
+- Changes from other tabs and users reach a screen as they happen only in the built Worker: under `vite dev` there are no Durable Objects, so `publish` does nothing and a screen reads everything again when it is shown again. Build, then run `wrangler dev`.
 - Sockets are for browsers. `connect` refuses a request whose `Origin` is not the app's own, including one with no `Origin`.
 - A hint without a `userId` reaches every socket on its hub: its kind and id are visible to every user connected there, as metadata, never data. Users who must not see each other's activity (staff and customers, say) belong on separate hubs, `` getByName(`${tenant}:staff`) ``, with each change published to every hub that should hear it.
 - Access is checked at the handshake, and again when the app disconnects a user. A session that expires on its own gives the app no moment to call `disconnect`: its screens hear hints (never data) until their sockets drop.

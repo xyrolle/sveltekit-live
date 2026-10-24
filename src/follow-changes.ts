@@ -5,7 +5,7 @@ import { updated } from "$app/state";
 import type { Followed } from "./follows.ts";
 import { type Freshness, freshnessOf, type Watch } from "./freshness.ts";
 import type { Hello, Hint, Publication, Told } from "./hint.ts";
-import { type Reading, readingOf } from "./reading.ts";
+import { type Reading, readingOf, type Standing } from "./reading.ts";
 import { keepOpen } from "./socket.ts";
 
 /**
@@ -28,13 +28,14 @@ import { keepOpen } from "./socket.ts";
  *     // {#if live.staleSince} Out of date since {live.staleSince} {/if}
  *
  * Under `vite dev` there is no hub (Durable Objects run in the built
- * Worker), so it does nothing, and the screen is never out of date.
+ * Worker), so the screen reads everything again whenever it is shown again
+ * (`followShown`), and is never said to be out of date.
  */
 export function followChanges(options: Options): Freshness {
 	let retry = () => {};
 	const watch = freshnessOf(() => retry());
 	onMount(() => {
-		if (dev) return;
+		if (dev) return followShown(options);
 		const follower = follow(options, watch);
 		retry = follower.retry;
 		return follower.stop;
@@ -53,7 +54,7 @@ let following: Reading | undefined;
  *
  *     onchange={() => inTurn(() => toggle(id))}
  *
- * Without a follower (under `vite dev`) it runs the command at once.
+ * Before the root layout has mounted the follower, it runs the command at once.
  */
 export function inTurn<T>(work: () => Promise<T>): Promise<T> {
 	return following ? following.turn(work) : work();
@@ -69,10 +70,11 @@ type Options = {
 /** What a tab's follower answers to: the layout's Retry, and its unmounting. */
 type Follower = { retry(): void; stop(): void };
 
-function follow(
-	{ socket, followed, readAgain }: Options,
-	watch: Watch,
-): Follower {
+/** The screen's scheduler, reading through `readAgain` the reads that follow what it is told. */
+function readerOf(
+	{ followed, readAgain }: Options,
+	stands: (standing: Standing) => void,
+) {
 	const kinds = new Set(followed.flatMap(({ follows }) => follows.map(kindOf)));
 	const reading = readingOf((told) => {
 		const reads = followed
@@ -83,13 +85,37 @@ function follow(
 		return reads.length > 0
 			? readAgain(told).updates(...reads)
 			: Promise.resolve({});
-	}, watch.stands);
+	}, stands);
 	const readEverything = () => {
 		for (const kind of kinds) reading.tell(kind);
 	};
+	return { reading, readEverything };
+}
+
+/**
+ * Under `vite dev`, with no hub to hear: the screen reads everything again
+ * whenever it is shown again, so what another tab changed reaches it once
+ * it is looked at.
+ */
+function followShown(options: Options): () => void {
+	const { reading, readEverything } = readerOf(options, () => {});
+	const shown = () => {
+		if (document.visibilityState === "visible") readEverything();
+	};
+	document.addEventListener("visibilitychange", shown);
+	following = reading;
+	return () => {
+		document.removeEventListener("visibilitychange", shown);
+		reading.stop();
+		following = undefined;
+	};
+}
+
+function follow(options: Options, watch: Watch): Follower {
+	const { reading, readEverything } = readerOf(options, watch.stands);
 
 	let heard: Hello | undefined;
-	const url = new URL(socket, location.href);
+	const url = new URL(options.socket, location.href);
 	url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
 	const heardFrame = (data: string) => {
 		const frame = frameOf(data);

@@ -20,12 +20,6 @@ A screen that holds reads offscreen (the next week of a calendar) reads them aga
 
 Done when: a screen can name the reads it holds ahead, a hint drops them instead of reading them again, and a test shows the drop.
 
-## Something live under `vite dev`
-
-Durable Objects exist only in the built Worker, so under `vite dev` a tab sees its own changes only.
-
-Done when: under `vite dev` a tab reads everything again when it is shown again, tested in the browser.
-
 ## The example on TypeScript 7
 
 SvelteKit 3.1 reads `tsconfig.json` through TypeScript's JavaScript API, which TypeScript 7 does not have, and svelte-check needs it too. The example uses TypeScript 6; the library is checked with TypeScript 7.

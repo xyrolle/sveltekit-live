@@ -146,7 +146,9 @@ A refresh that fails on the server fails only its own read: Kit answers the comm
 
 ### Development
 
-Durable Objects run only in the built Worker; adapter-cloudflare's `vite dev` has none. So under `vite dev`, `publish` and `followChanges()` do nothing, and an app's commands still refresh their own reads; `wrangler dev` on the build runs the real path.
+Durable Objects run only in the built Worker; adapter-cloudflare's `vite dev` has none. So under `vite dev`, `publish` does nothing and `followChanges()` opens no socket. It reads everything again whenever the tab is shown again, so what another tab changed reaches a screen once it is looked at, and an app's commands still refresh their own reads. `wrangler dev` on the build runs the real path.
+
+Rejected: a hub in the dev server, which would take a second runtime beside Vite, where reading again when a tab is shown covers a developer's tabs. Also rejected: reading again on a timer, which would poll.
 
 ### Packaging
 
@@ -159,5 +161,4 @@ Kit's remote functions are still experimental, so the app enables `experimental.
 What comes after this core goes in `docs/followups.md`:
 
 - closing the sockets of a session that expired on its own;
-- dropping data a screen read ahead (the next week) instead of reading it again;
-- re-reading when a tab is shown again under `vite dev`.
+- dropping data a screen read ahead (the next week) instead of reading it again.
