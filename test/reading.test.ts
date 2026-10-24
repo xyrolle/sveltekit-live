@@ -1,18 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Told } from "../src/hint.ts";
-import { readingOf } from "../src/reading.ts";
+import { readingOf, type Standing } from "../src/reading.ts";
 
 /** A screen's reads, each answered when the test says. */
 function screen() {
 	const sent: Told[] = [];
 	const answers: PromiseWithResolvers<Told>[] = [];
-	const reading = readingOf((told) => {
-		sent.push(told);
-		const answer = Promise.withResolvers<Told>();
-		answers.push(answer);
-		return answer.promise;
-	});
-	return { reading, sent, answers };
+	const standings: Standing[] = [];
+	const reading = readingOf(
+		(told) => {
+			sent.push(told);
+			const answer = Promise.withResolvers<Told>();
+			answers.push(answer);
+			return answer.promise;
+		},
+		(standing) => standings.push(standing),
+	);
+	return { reading, sent, answers, standings };
 }
 
 /** Lets what was told, or a read's answer, run its course. */
@@ -71,6 +75,20 @@ describe("readingOf", () => {
 			{ todo: ["b", "c"] },
 			{ todo: ["d"] },
 		]);
+	});
+
+	it("says how its reads stand each time that changes", async () => {
+		const { reading, answers, standings } = screen();
+		reading.tell("todo", "a");
+		await settle();
+		answers[0]?.reject(new Error("offline"));
+		await settle();
+		reading.recover();
+		await vi.advanceTimersByTimeAsync(500);
+		answers[1]?.resolve({});
+		await settle();
+
+		expect(standings).toEqual(["reading", "failed", "reading", "current"]);
 	});
 
 	it("keeps what a failed read was told until the socket is back", async () => {

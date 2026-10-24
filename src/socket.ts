@@ -5,14 +5,25 @@ const PONG_WITHIN_MS = 10_000;
 const RETRY_FIRST_MS = 1_000;
 const RETRY_MAX_MS = 30_000;
 
+/** A socket kept open (`keepOpen`). */
+export type KeptOpen = {
+	/** Opens it at once, if it is waiting to be opened again. */
+	retryNow(): void;
+	/** Closes it for good. */
+	close(): void;
+};
+
 /**
  * Keeps a socket open to `url` and hands `heard` every frame but the pongs.
- * A socket that closes, or answers no ping, is opened again after a delay
- * that doubles from one second to half a minute, spread over its upper half
- * so the screens of a tenant do not all come back at once after an outage.
- * Returns what closes it for good.
+ * A socket that closes, or answers no ping, is `lost`, and opened again
+ * after a delay that doubles from one second to half a minute, spread over
+ * its upper half so the screens of a tenant do not all come back at once
+ * after an outage.
  */
-export function keepOpen(url: URL, heard: (frame: string) => void): () => void {
+export function keepOpen(
+	url: URL,
+	{ heard, lost }: { heard: (frame: string) => void; lost: () => void },
+): KeptOpen {
 	let socket: WebSocket | undefined;
 	let failures = 0;
 	let retry: ReturnType<typeof setTimeout> | undefined;
@@ -24,13 +35,14 @@ export function keepOpen(url: URL, heard: (frame: string) => void): () => void {
 		clearTimeout(pong);
 		pong = undefined;
 	};
-	const lose = (lost: WebSocket) => {
-		if (socket !== lost) return;
+	const lose = (gone: WebSocket) => {
+		if (socket !== gone) return;
 		socket = undefined;
 		quiet();
 		const ceiling = Math.min(RETRY_MAX_MS, RETRY_FIRST_MS * 2 ** failures);
 		failures += 1;
 		retry = setTimeout(open, ceiling * (0.5 + Math.random() / 2));
+		lost();
 	};
 	// A connection can die with neither end told (a laptop lid, a mobile
 	// network): silence after a ping means it is gone.
@@ -43,6 +55,7 @@ export function keepOpen(url: URL, heard: (frame: string) => void): () => void {
 		}, PONG_WITHIN_MS);
 	};
 	function open() {
+		retry = undefined;
 		const opened = new WebSocket(url);
 		socket = opened;
 		opened.addEventListener("open", () => {
@@ -62,11 +75,19 @@ export function keepOpen(url: URL, heard: (frame: string) => void): () => void {
 	}
 
 	open();
-	return () => {
-		const open = socket;
-		socket = undefined;
-		clearTimeout(retry);
-		quiet();
-		open?.close(1000);
+	return {
+		retryNow() {
+			if (retry === undefined) return;
+			clearTimeout(retry);
+			open();
+		},
+		close() {
+			const open = socket;
+			socket = undefined;
+			clearTimeout(retry);
+			retry = undefined;
+			quiet();
+			open?.close(1000);
+		},
 	};
 }

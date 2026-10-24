@@ -3,6 +3,7 @@ import { dev, version } from "$app/env";
 import type { RemoteCommand } from "$app/server";
 import { updated } from "$app/state";
 import type { Followed } from "./follows.ts";
+import { type Freshness, freshnessOf, type Watch } from "./freshness.ts";
 import type { Hello, Hint, Publication, Told } from "./hint.ts";
 import { type Reading, readingOf } from "./reading.ts";
 import { keepOpen } from "./socket.ts";
@@ -20,11 +21,25 @@ import { keepOpen } from "./socket.ts";
  * whenever it finds it missed a publication. A hello from another build
  * has Kit check for it (`updated`); reloading is the app's to decide.
  *
+ * It answers with whether the screen may be out of date (`Freshness`), for
+ * the layout to say so, with a Retry:
+ *
+ *     const live = followChanges({ socket: "/live", followed, readAgain });
+ *     // {#if live.staleSince} Out of date since {live.staleSince} {/if}
+ *
  * Under `vite dev` there is no hub (Durable Objects run in the built
- * Worker), so it does nothing.
+ * Worker), so it does nothing, and the screen is never out of date.
  */
-export function followChanges(options: Options): void {
-	onMount(() => (dev ? undefined : follow(options)));
+export function followChanges(options: Options): Freshness {
+	let retry = () => {};
+	const watch = freshnessOf(() => retry());
+	onMount(() => {
+		if (dev) return;
+		const follower = follow(options, watch);
+		retry = follower.retry;
+		return follower.stop;
+	});
+	return watch;
 }
 
 /** The tab's follower, while its root layout is mounted. */
@@ -51,7 +66,13 @@ type Options = {
 	readAgain: RemoteCommand<Told, Told>;
 };
 
-function follow({ socket, followed, readAgain }: Options): () => void {
+/** What a tab's follower answers to: the layout's Retry, and its unmounting. */
+type Follower = { retry(): void; stop(): void };
+
+function follow(
+	{ socket, followed, readAgain }: Options,
+	watch: Watch,
+): Follower {
 	const kinds = new Set(followed.flatMap(({ follows }) => follows.map(kindOf)));
 	const reading = readingOf((told) => {
 		const reads = followed
@@ -62,7 +83,7 @@ function follow({ socket, followed, readAgain }: Options): () => void {
 		return reads.length > 0
 			? readAgain(told).updates(...reads)
 			: Promise.resolve({});
-	});
+	}, watch.stands);
 	const readEverything = () => {
 		for (const kind of kinds) reading.tell(kind);
 	};
@@ -70,7 +91,7 @@ function follow({ socket, followed, readAgain }: Options): () => void {
 	let heard: Hello | undefined;
 	const url = new URL(socket, location.href);
 	url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-	const close = keepOpen(url, (data) => {
+	const heardFrame = (data: string) => {
 		const frame = frameOf(data);
 		if ("series" in frame) {
 			if (frame.version !== version) void updated.check();
@@ -81,18 +102,28 @@ function follow({ socket, followed, readAgain }: Options): () => void {
 			heard = frame;
 			if (missed) readEverything();
 			else reading.recover();
+			// After the reads it calls for, so the screen is current only once they land.
+			watch.connected();
 		} else if (heard) {
 			const missed = frame.n !== heard.n + 1;
 			heard = { ...heard, n: frame.n };
 			if (missed) readEverything();
 			else for (const { kind, id } of frame.hints) reading.tell(kind, id);
 		}
-	});
+	};
+	const kept = keepOpen(url, { heard: heardFrame, lost: watch.lost });
 	following = reading;
-	return () => {
-		close();
-		reading.stop();
-		following = undefined;
+	return {
+		retry() {
+			kept.retryNow();
+			reading.recover();
+		},
+		stop() {
+			kept.close();
+			reading.stop();
+			watch.stop();
+			following = undefined;
+		},
 	};
 }
 

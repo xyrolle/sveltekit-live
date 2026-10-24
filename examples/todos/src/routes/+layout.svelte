@@ -7,8 +7,15 @@
 
 	let { children }: { children: Snippet } = $props();
 
-	followChanges({ socket: "/live", followed, readAgain });
+	const live = followChanges({ socket: "/live", followed, readAgain });
 </script>
+
+{#if live.staleSince}
+	<p role="status">
+		This may be out of date since {live.staleSince.toLocaleTimeString()}.
+		<button type="button" onclick={() => live.retry()}>Retry</button>
+	</p>
+{/if}
 
 {#if updated.current}
 	<p role="status">

@@ -14,12 +14,6 @@ Done when: a socket closes once the session it was opened under has expired, wit
 
 Done when: `publish`, or a sibling entry, runs from `worker.js`, and the example's cron uses it.
 
-## Say when a screen may be stale
-
-While the socket is down, or after a read-again failed, a screen shows what it read last and does not say so.
-
-Done when: `followChanges` exposes whether the screen may be out of date and since when, with a Retry, and the example shows it.
-
 ## Let go of what a screen read ahead
 
 A screen that holds reads offscreen (the next week of a calendar) reads them again on every hint of their kind.

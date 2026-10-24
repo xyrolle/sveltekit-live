@@ -6,6 +6,13 @@ const WINDOW_MS = 500;
 /** How long a read may go unanswered before it counts as failed and the next may go. */
 const ANSWER_WITHIN_MS = 15_000;
 
+/**
+ * How a screen's reads stand: nothing left to read (`current`), something
+ * told or on its way (`reading`), or a read failed and its kinds wait for a
+ * hint or the socket (`failed`).
+ */
+export type Standing = "current" | "reading" | "failed";
+
 /** When a screen reads again what it was told (`readingOf`). */
 export type Reading = {
 	/** Something of `kind` changed: the record `id`, or the kind whole. */
@@ -52,16 +59,31 @@ type State =
  * `ANSWER_WITHIN_MS` counts as failed, so that the network holding one does
  * not hold every read after it. A page's own work that also reads (`turn`)
  * goes in the same line: after the read on its way, and before the next.
+ * `stands` hears how the reads stand, each time that changes.
  */
-export function readingOf(read: (told: Told) => Promise<Told>): Reading {
+export function readingOf(
+	read: (told: Told) => Promise<Told>,
+	stands: (standing: Standing) => void,
+): Reading {
 	let state: State = { is: "idle" };
 	let pending: Heard = new Map();
 	let sentAt = Number.NEGATIVE_INFINITY;
 	/** The page's own work on its way, or waiting for the read on its way. */
 	let turns = 0;
 	let queued = false;
+	let reported: Standing = "current";
 
+	const standing = (): Standing => {
+		if (state.is === "kept") return "failed";
+		return state.is === "idle" && pending.size === 0 ? "current" : "reading";
+	};
 	const schedule = () => {
+		if (state.is === "stopped") return;
+		const now = standing();
+		if (now !== reported) {
+			reported = now;
+			stands(now);
+		}
 		if (queued) return;
 		queued = true;
 		queueMicrotask(next);

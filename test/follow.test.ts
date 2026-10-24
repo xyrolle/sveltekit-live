@@ -377,6 +377,34 @@ describe("followChanges", { timeout: 15_000 }, () => {
 		await closeAll(ana, bob);
 	});
 
+	it("says the screen may be out of date once its socket has been down 15 s, until Retry brings it back", async () => {
+		let refusing = false;
+		const sockets: WebSocketRoute[] = [];
+		const bob = await openScreen(async (page) => {
+			await page.clock.install();
+			await page.routeWebSocket(/\/live$/, (socket) => {
+				sockets.push(socket);
+				if (refusing) socket.close();
+				else socket.connectToServer();
+			});
+		});
+		const notice = bob.getByText("This may be out of date since");
+
+		refusing = true;
+		await sockets[0]?.close();
+		await bob.clock.runFor(14_000);
+		expect(await notice.count()).toBe(0);
+		await bob.clock.runFor(1_000);
+		await notice.waitFor();
+
+		// Time stands still, so only Retry, not the next attempt, reconnects.
+		await bob.clock.pauseAt((await bob.evaluate(() => Date.now())) + 1);
+		refusing = false;
+		await bob.getByRole("button", { name: "Retry" }).click();
+		await notice.waitFor({ state: "detached" });
+		await closeAll(bob);
+	});
+
 	it("has Kit check for a newer build when the hub's hello names one", async () => {
 		const newer = (frame: string) =>
 			frame.replace(/"version":"[^"]*"/, '"version":"newer"');

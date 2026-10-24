@@ -151,7 +151,7 @@ When a user loses access (they signed out, or were removed), the app closes thei
 await disconnect(env.LIVE.getByName(tenant), user);
 ```
 
-**6. The root layout follows changes:**
+**6. The root layout follows changes,** and says when the screen may be out of date:
 
 ```svelte
 <script lang="ts">
@@ -159,9 +159,18 @@ await disconnect(env.LIVE.getByName(tenant), user);
 	import { readAgain } from "#lib/live.remote.ts";
 	import { followed } from "#lib/live.ts";
 
-	followChanges({ socket: "/live", followed, readAgain });
+	const live = followChanges({ socket: "/live", followed, readAgain });
 </script>
+
+{#if live.staleSince}
+	<p role="status">
+		This may be out of date since {live.staleSince.toLocaleTimeString()}.
+		<button type="button" onclick={() => live.retry()}>Retry</button>
+	</p>
+{/if}
 ```
+
+The screen may be out of date from the moment its socket is lost or a read fails, until the socket is back and the reads it calls for have landed. `staleSince` says so only once that has lasted 15 s, so a blip says nothing.
 
 A read that fails on the server is read again with the next hint of its kind, or once the socket is back. Kit keeps its last answer in `.current` meanwhile, and the example shows that answer rather than awaiting the failed read again:
 
@@ -191,7 +200,8 @@ In the example, `pnpm dev` runs it under Vite, where each tab sees its own chang
 - **`readAgainCommand(followed)`** (`sveltekit-live/server`): the command that screens read again through. Each read refreshes through its own query and that query's checks; the command has no guard of its own. It answers with the kinds and records of the reads that failed, which the screen keeps to read again. A refusal (4xx) is a read's own answer, not a failure.
 - **`connect(request, { hub, user })`** (`sveltekit-live/server`): hands the socket to `hub`, for `user`. It answers 426 to a request that is no WebSocket upgrade, and 403 to one from another origin.
 - **`disconnect(hub, user)`** (`sveltekit-live/server`): closes every socket of `user` on `hub`: none of them hears anything more. Each screen reconnects, and one the socket route refuses keeps retrying, as after any lost connection. Under `vite dev` it does nothing.
-- **`followChanges({ socket, followed, readAgain })`** (`sveltekit-live/client`): called once, in the root layout. It opens one socket per tab, to the route at `socket`.
+- **`followChanges({ socket, followed, readAgain })`** (`sveltekit-live/client`): called once, in the root layout. It opens one socket per tab, to the route at `socket`, and answers with the screen's `Freshness`.
+- **`Freshness`** (`sveltekit-live/client`): `staleSince`, since when the screen may be out of date, once that has lasted 15 s, or `undefined` while it is current (reactive); and `retry()`, which reconnects at once if the socket is down and reads again what failed. Under `vite dev` it is always current.
 - **`inTurn(work)`** (`sveltekit-live/client`): runs a command after the follower's read on its way, and holds the follower's next read until it lands. It waits for that read 15 s at most. Without a follower (under `vite dev`), it runs the command at once.
 - **`LiveHub`** (`sveltekit-live/hub`): the Durable Object that holds a tenant's sockets.
 
