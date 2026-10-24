@@ -1,7 +1,7 @@
 {
 	"$schema": "./node_modules/wrangler/config-schema.json",
 	"name": "sveltekit-live-todos",
-	// The adapter's Worker, with LiveHub added (worker.js).
+	// The adapter's Worker, with LiveHub and the outbox's cron added (worker.js).
 	"main": "worker.js",
 	"compatibility_date": "2026-10-01",
 	"compatibility_flags": ["nodejs_compat"],
@@ -10,6 +10,8 @@
 		"bindings": [{ "name": "LIVE", "class_name": "LiveHub" }]
 	},
 	"migrations": [{ "tag": "v1", "new_sqlite_classes": ["LiveHub"] }],
+	// Every minute, what a command committed but did not get to publish.
+	"triggers": { "crons": ["* * * * *"] },
 	"d1_databases": [
 		{
 			"binding": "DB",

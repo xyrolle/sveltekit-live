@@ -76,17 +76,55 @@ import { followed } from "./live.ts";
 export const readAgain = readAgainCommand(followed);
 ```
 
-**4. Commands publish what they changed.** A command refreshes its own screen's reads as any Kit command does; `publish` tells everyone else, once the write has committed, through the hub of the tenant it changed:
+**4. Commands publish what they changed.** A command refreshes its own screen's reads as any Kit command does; `publish` tells everyone else, once the write has committed, through the hub of the tenant it changed. A Worker can die between the commit and the publication, and no screen would learn of the change. So the hints go in an outbox, in the transaction of the change, until the hub has them:
+
+```ts
+// src/lib/server/outbox.ts
+export async function commit(change: D1PreparedStatement, hints: Hint[]) {
+	const kept = crypto.randomUUID();
+	await env.DB.batch([
+		change,
+		env.DB.prepare("insert into outbox (id, hints) values (?, ?)").bind(
+			kept,
+			JSON.stringify(hints),
+		),
+	]);
+	await publish(env.LIVE.getByName("board"), hints);
+	await env.DB.prepare("delete from outbox where id = ?").bind(kept).run();
+}
+```
 
 ```ts
 // src/lib/todos.remote.ts
 export const toggle = command(v.string(), async (id) => {
-	await env.DB.prepare("update todos set done = 1 - done where id = ?")
-		.bind(id)
-		.run();
+	await commit(
+		env.DB.prepare("update todos set done = 1 - done where id = ?").bind(id),
+		[{ kind: "todo", id }],
+	);
 	await todo(id).refresh();
-	await publish(env.LIVE.getByName("board"), [{ kind: "todo", id }]);
 });
+```
+
+A Cron Trigger, every minute, publishes what a Worker that died left in the outbox. It calls the hub itself, as `publish` is compiled with the app by Vite and Wrangler bundles the Worker's entry. A publication sent twice (the Worker died after the hub had it) costs each screen one more read.
+
+```js
+// worker.js
+import kit from "./.svelte-kit/kit-worker.js";
+
+export { LiveHub } from "sveltekit-live/hub";
+
+export default {
+	...kit,
+	async scheduled(_controller, env) {
+		const { results } = await env.DB.prepare(
+			"select id, hints from outbox",
+		).all();
+		for (const { id, hints } of results) {
+			await env.LIVE.getByName("board").publish(JSON.parse(hints));
+			await env.DB.prepare("delete from outbox where id = ?").bind(id).run();
+		}
+	},
+};
 ```
 
 The screen that ran the command hears its own hint too, and reads the change once more.
@@ -137,7 +175,7 @@ In the example, `pnpm dev` runs it under Vite, where each tab sees its own chang
 - Sockets are for browsers. `connect` refuses a request whose `Origin` is not the app's own, including one with no `Origin`.
 - A hint without a `userId` reaches every socket on its hub: its kind and id are visible to every user connected there, as metadata, never data. Users who must not see each other's activity (staff and customers, say) belong on separate hubs, `` getByName(`${tenant}:staff`) ``, with each change published to every hub that should hear it.
 - Access is checked at the handshake, and again when the app disconnects a user. A session that expires on its own gives the app no moment to call `disconnect`: its screens hear hints (never data) until their sockets drop.
-- A change whose publication never happens (the Worker died after the commit) goes unnoticed, as no number was taken.
+- A command that publishes without an outbox (step 4) loses its change's hints if the Worker dies after the commit, and nothing notices, as no number was taken.
 - The user id is the socket's one hibernation tag: at most 256 characters. A hub holds at most 32,768 sockets.
 - A query missing from `followed` is not live, and nothing checks that the list is complete.
 - The library has Kit check for a newer build, which turns Kit's `updated.current` true. Reloading is the app's decision, as only the app knows its unsaved drafts.
