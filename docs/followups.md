@@ -20,8 +20,8 @@ A screen that holds reads offscreen (the next week of a calendar) reads them aga
 
 Done when: a screen can name the reads it holds ahead, a hint drops them instead of reading them again, and a test shows the drop.
 
-## The example on TypeScript 7
+## TypeScript 7 alone in the example
 
-SvelteKit 3.1 reads `tsconfig.json` through TypeScript's JavaScript API, which TypeScript 7 does not have, and svelte-check needs it too. The example uses TypeScript 6; the library is checked with TypeScript 7.
+The example's types are checked by TypeScript 7: svelte-check takes it as `@typescript/native` (`--tsgo-experimental-api`). But `typescript` itself is still 6, as SvelteKit 3.1 reads `tsconfig.json` through TypeScript's JavaScript API, which 7.0 lacks, and svelte2tsx builds on that API too. svelte-check's maintainers declined to load TypeScript 6 under another name instead (sveltejs/language-tools#3063).
 
-Done when: `svelte-kit sync` and svelte-check run on TypeScript 7, and the example moves to it.
+Done when: SvelteKit and svelte2tsx run on TypeScript 7.1's API, and the example drops `typescript` 6 and the alias.
