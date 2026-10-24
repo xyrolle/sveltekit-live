@@ -100,6 +100,36 @@ describe("readingOf", () => {
 		expect(sent).toEqual([{ todos: true, todo: ["a"] }, { todo: ["a"] }]);
 	});
 
+	it("runs a page's own work once the read on its way has landed", async () => {
+		const { reading, answers } = screen();
+		reading.tell("todo", "a");
+		await settle();
+		let ran = false;
+		const turn = reading.turn(async () => {
+			ran = true;
+		});
+		await vi.advanceTimersByTimeAsync(1_000);
+		expect(ran).toBe(false);
+
+		answers[0]?.resolve({});
+		await turn;
+		expect(ran).toBe(true);
+	});
+
+	it("holds what is told while a page's own work is on its way until it lands", async () => {
+		const { reading, sent } = screen();
+		const work = Promise.withResolvers<void>();
+		const turn = reading.turn(() => work.promise);
+		reading.tell("todo", "a");
+		await vi.advanceTimersByTimeAsync(1_000);
+		expect(sent).toEqual([]);
+
+		work.resolve();
+		await turn;
+		await settle();
+		expect(sent).toEqual([{ todo: ["a"] }]);
+	});
+
 	it("lets the next read go once one has had no answer for 15 s, with what that one was told", async () => {
 		const { reading, sent } = screen();
 		reading.tell("todo", "a");

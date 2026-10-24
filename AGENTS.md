@@ -4,7 +4,7 @@ sveltekit-live keeps SvelteKit remote functions live across tabs and users on Cl
 
 ## Design invariants
 - **A hint never carries data.** It carries a kind, the id of the one record a change is about (for a record kind), and a user id for a person's own kind. Nothing else.
-- **Mutations declare what they change (`changes`); queries declare what they follow (`follows`).** Nothing is wired by hand in a page.
+- **Commands publish what they change (`publish`); queries declare what they follow (`follows`).** Pages wire nothing for reads; a command that also refreshes goes through `inTurn`.
 - **One Durable Object per tenant numbers its publications in a series kept in its storage.** It greets each socket with where the series stands and the app's build. A screen that missed a number reads everything again. A screen on an older build learns of the new one through Kit's `updated`; the app reloads when its drafts allow.
 - **Re-reads are batched into one request,** with one request in flight at a time. What failed is kept until the socket is back.
 - **Never poll.**

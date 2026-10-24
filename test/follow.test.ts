@@ -343,6 +343,40 @@ describe("followChanges", { timeout: 15_000 }, () => {
 		await closeAll(ana, bob);
 	});
 
+	it("sends a page's own command only once the follower's read on its way has landed", async () => {
+		const bob = await openScreen();
+		let holding = false;
+		const held = Promise.withResolvers<() => Promise<void>>();
+		const ana = await openScreen((page) =>
+			page.route(/\/readAgain$/, async (route) => {
+				if (!holding) return route.continue();
+				holding = false;
+				// Answered by the server now, delivered when the test says.
+				const response = await route.fetch();
+				held.resolve(() => route.fulfill({ response }));
+			}),
+		);
+		holding = true;
+		await add(bob, "Pack the tent");
+		const deliverLate = await held.promise;
+
+		const order: string[] = [];
+		ana.on("request", (request) => {
+			if (request.url().endsWith("/add")) order.push("command sent");
+		});
+		ana.on("response", (response) => {
+			if (response.url().endsWith("/readAgain")) order.push("read landed");
+		});
+		// Ana adds a todo while her read of the list, older, is on its way.
+		await ana.getByLabel("New todo").fill("Buy stamps");
+		await ana.getByRole("button", { name: "Add" }).click();
+		await deliverLate();
+		await ana.getByLabel("Buy stamps").waitFor();
+
+		expect(order.slice(0, 2)).toEqual(["read landed", "command sent"]);
+		await closeAll(ana, bob);
+	});
+
 	it("has Kit check for a newer build when the hub's hello names one", async () => {
 		const newer = (frame: string) =>
 			frame.replace(/"version":"[^"]*"/, '"version":"newer"');

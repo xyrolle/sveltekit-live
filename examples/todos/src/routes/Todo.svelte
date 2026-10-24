@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { inTurn } from "sveltekit-live/client";
 	import { todo, toggle } from "#lib/todos.remote.ts";
 
 	let { id }: { id: string } = $props();
@@ -11,7 +12,7 @@
 
 <li>
 	<label>
-		<input type="checkbox" checked={item.done} onchange={() => toggle(id)} />
+		<input type="checkbox" checked={item.done} onchange={() => inTurn(() => toggle(id))} />
 		{item.text}
 	</label>
 </li>

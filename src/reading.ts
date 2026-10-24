@@ -12,6 +12,8 @@ export type Reading = {
 	tell(kind: string, id?: string): void;
 	/** The socket is back: what a failed read was told is read now. */
 	recover(): void;
+	/** Runs a page's own `work` after the read on its way, holding the next read until it lands. */
+	turn<T>(work: () => Promise<T>): Promise<T>;
 	stop(): void;
 };
 
@@ -22,6 +24,8 @@ type OnItsWay = {
 	toldSince: boolean;
 	/** What makes it count as failed, `ANSWER_WITHIN_MS` after it was sent. */
 	unanswered: ReturnType<typeof setTimeout>;
+	/** Settled once it has landed, failed or counted as failed. */
+	over: PromiseWithResolvers<void>;
 };
 
 /**
@@ -46,12 +50,15 @@ type State =
  * a timer, and so is what a read answers that it could not read in (a read
  * that failed on the server). A read with no answer within
  * `ANSWER_WITHIN_MS` counts as failed, so that the network holding one does
- * not hold every read after it.
+ * not hold every read after it. A page's own work that also reads (`turn`)
+ * goes in the same line: after the read on its way, and before the next.
  */
 export function readingOf(read: (told: Told) => Promise<Told>): Reading {
 	let state: State = { is: "idle" };
 	let pending: Heard = new Map();
 	let sentAt = Number.NEGATIVE_INFINITY;
+	/** The page's own work on its way, or waiting for the read on its way. */
+	let turns = 0;
 	let queued = false;
 
 	const schedule = () => {
@@ -78,7 +85,7 @@ export function readingOf(read: (told: Told) => Promise<Told>): Reading {
 	};
 	const next = () => {
 		queued = false;
-		if (state.is !== "idle" || pending.size === 0) return;
+		if (state.is !== "idle" || turns > 0 || pending.size === 0) return;
 		const wait = sentAt + WINDOW_MS - Date.now();
 		if (wait > 0) {
 			state = {
@@ -97,6 +104,7 @@ export function readingOf(read: (told: Told) => Promise<Told>): Reading {
 			is: "reading",
 			told: pending,
 			toldSince: false,
+			over: Promise.withResolvers(),
 			unanswered: setTimeout(() => {
 				const failure = new Error(`No answer within ${ANSWER_WITHIN_MS} ms.`);
 				fail(reading, reading.told, failure);
@@ -142,6 +150,7 @@ export function readingOf(read: (told: Told) => Promise<Told>): Reading {
 	const settle = (reading: OnItsWay, to: State) => {
 		clearTimeout(reading.unanswered);
 		state = to;
+		reading.over.resolve();
 		schedule();
 	};
 
@@ -151,8 +160,21 @@ export function readingOf(read: (told: Told) => Promise<Told>): Reading {
 			if (state.is === "kept") state = { is: "idle" };
 			schedule();
 		},
+		async turn(work) {
+			turns += 1;
+			try {
+				if (state.is === "reading") await state.over.promise;
+				return await work();
+			} finally {
+				turns -= 1;
+				schedule();
+			}
+		},
 		stop() {
-			if (state.is === "reading") clearTimeout(state.unanswered);
+			if (state.is === "reading") {
+				clearTimeout(state.unanswered);
+				state.over.resolve();
+			}
 			if (state.is === "pausing") clearTimeout(state.until);
 			state = { is: "stopped" };
 		},

@@ -54,7 +54,7 @@ export const GET: RequestHandler = async ({ request, locals }) => {
 
 The Worker entry exports `LiveHub` from `sveltekit-live/hub`, bound as a Durable Object (`env.LIVE`).
 
-Public API: `follows`, `readAgainCommand`, `connect`, `disconnect`, `publish`, `followChanges`, `LiveHub`, and the `Hint` and `Register` types.
+Public API: `follows`, `readAgainCommand`, `connect`, `disconnect`, `publish`, `followChanges`, `inTurn`, `LiveHub`, and the `Hint` and `Register` types.
 
 ## Decisions
 
@@ -129,6 +129,14 @@ A session that expires on its own gives the app no moment to call `disconnect`: 
 - **Liveness:** it pings every 30 s and gives the socket up when no pong comes within 10 s; it reconnects after 1 s, doubling to 30 s, with jitter.
 - **An older build:** when hello's version is not this tab's, it calls Kit's `updated.check()`. The reload is the app's, because only the app knows its drafts; Kit's documented `beforeNavigate` pattern loads the new build at the next navigation.
 
+### A page's own commands go in turn
+
+Pages wire nothing for reads; a command that also refreshes goes through `inTurn`.
+
+Kit puts each command's answer in as it lands, so of two commands that refresh a read, the one that lands last wins. A page's command that refreshes a read, sent while the follower's read-again of it is on its way, can land first and be overwritten by the older answer, until the next hint. So `inTurn(work)` runs the command after the follower's read on its way (15 s at most, as that read is bounded), and holds the follower's next read until the command lands. Kit has no public hook on a page's commands, so the page names each one: a one-line wrapper at the call.
+
+Rejected: holding every command the app defines, which would need the library to see the app's remote modules, as `follows` does for its reads. Also rejected: reading everything again after each of the page's commands, which costs a read per command and still lands in any order.
+
 ### The read-again command
 
 `readAgainCommand(followed)` is a plain Kit `command`. It has no guard of its own: each read is refreshed through its own query and that query's checks. Its input is checked by hand, as the library takes no schema dependency: each kind maps to `true` or to at most 100 ids, past which the browser reads the kind whole.
@@ -151,6 +159,5 @@ What comes after this core goes in `docs/followups.md`:
 
 - closing the sockets of a session that expired on its own;
 - a stale notice with Retry while the socket is down or a read failed;
-- one ordered line shared by the follower and the page's own refreshes;
 - dropping data a screen read ahead (the next week) instead of reading it again;
 - re-reading when a tab is shown again under `vite dev`.

@@ -173,6 +173,13 @@ A read that fails on the server is read again with the next hint of its kind, or
 </script>
 ```
 
+**7. Pages run their commands in turn.** A command that also refreshes its own screen's reads goes through `inTurn`, which runs it after the follower's read on its way, and holds the follower's next read until it lands. Kit keeps whichever command's answer lands last, so without it an older read-again could land over the command's newer answer. Pages wire nothing for reads.
+
+```svelte
+<!-- src/routes/Todo.svelte -->
+<input type="checkbox" checked={item.done} onchange={() => inTurn(() => toggle(id))} />
+```
+
 In the example, `pnpm dev` runs it under Vite, where each tab sees its own changes only. `pnpm build` and then `pnpm preview` (`wrangler dev`) run it live across tabs.
 
 ## API
@@ -185,6 +192,7 @@ In the example, `pnpm dev` runs it under Vite, where each tab sees its own chang
 - **`connect(request, { hub, user })`** (`sveltekit-live/server`): hands the socket to `hub`, for `user`. It answers 426 to a request that is no WebSocket upgrade, and 403 to one from another origin.
 - **`disconnect(hub, user)`** (`sveltekit-live/server`): closes every socket of `user` on `hub`: none of them hears anything more. Each screen reconnects, and one the socket route refuses keeps retrying, as after any lost connection. Under `vite dev` it does nothing.
 - **`followChanges({ socket, followed, readAgain })`** (`sveltekit-live/client`): called once, in the root layout. It opens one socket per tab, to the route at `socket`.
+- **`inTurn(work)`** (`sveltekit-live/client`): runs a command after the follower's read on its way, and holds the follower's next read until it lands. It waits for that read 15 s at most. Without a follower (under `vite dev`), it runs the command at once.
 - **`LiveHub`** (`sveltekit-live/hub`): the Durable Object that holds a tenant's sockets.
 
 ## Limitations

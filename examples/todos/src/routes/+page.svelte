@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { inTurn } from "sveltekit-live/client";
 	import { add, todos } from "#lib/todos.remote.ts";
 	import Todo from "./Todo.svelte";
 
@@ -9,7 +10,7 @@
 
 	async function submit(event: SubmitEvent) {
 		event.preventDefault();
-		await add(text);
+		await inTurn(() => add(text));
 		text = "";
 	}
 </script>
