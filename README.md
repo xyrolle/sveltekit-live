@@ -113,7 +113,7 @@ export const toggle = command(v.string(), async (id) => {
 });
 ```
 
-A command whose publication fails still succeeds, as its change did: the hints wait in the outbox. A Cron Trigger, every minute, publishes what the outbox holds, whether the hub refused it or the Worker died. It calls the hub itself, as `publish` is compiled with the app by Vite and Wrangler bundles the Worker's entry. A publication sent twice (the Worker died after the hub had it) costs each screen one more read.
+A command whose publication fails still succeeds, as its change did: the hints wait in the outbox. A Cron Trigger, every minute, publishes what the outbox holds, whether the hub refused it or the Worker died. It publishes through the hub's own `publish`, which Worker code that Vite doesn't build calls. A publication sent twice (the Worker died after the hub had it) costs each screen one more read.
 
 ```js
 // worker.js
@@ -203,7 +203,7 @@ In the example, `pnpm dev` runs it under Vite, where a tab sees another's change
 - **`followChanges({ socket, followed, readAgain })`** (`sveltekit-live/client`): called once, in the root layout. It opens one socket per tab, to the route at `socket`, and answers with the screen's `Freshness`. Under `vite dev` it opens none, and reads everything again whenever the tab is shown again.
 - **`Freshness`** (`sveltekit-live/client`): `staleSince`, since when the screen may be out of date, once that has lasted 15 s, or `undefined` while it is current (reactive); and `retry()`, which reconnects at once if the socket is down and reads again what failed. Under `vite dev` it is always current.
 - **`inTurn(work)`** (`sveltekit-live/client`): runs a command after the follower's read on its way, and holds the follower's next read until it lands. It waits for that read 15 s at most. Before the root layout has mounted the follower, it runs the command at once.
-- **`LiveHub`** (`sveltekit-live/hub`): the Durable Object that holds a tenant's sockets.
+- **`LiveHub`** (`sveltekit-live/hub`): the Durable Object that holds a tenant's sockets. Worker code that Vite doesn't build (a cron, a queue consumer, another Durable Object) calls its own `publish(hints)` and `disconnect(user)` on the stub. `publish` and `disconnect` from `sveltekit-live/server` call those same methods, and only add a no-op under `vite dev`.
 
 ## Limitations
 

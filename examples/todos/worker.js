@@ -12,8 +12,8 @@ export default {
 			"select id, hints from outbox",
 		).all();
 		for (const { id, hints } of results) {
-			// Straight to the hub: `publish` is compiled with the app by Vite,
-			// and Wrangler bundles this file.
+			// The hub's own `publish`, as Worker code that Vite doesn't build
+			// calls it.
 			await env.LIVE.getByName("board").publish(JSON.parse(hints));
 			await env.DB.prepare("delete from outbox where id = ?").bind(id).run();
 		}
