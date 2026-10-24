@@ -77,8 +77,19 @@ async function tick(page: Page, text: string) {
 	return (await answered).json();
 }
 
-const shownDone = (page: Page, text: string) =>
-	page.getByRole("checkbox", { name: text, checked: true }).waitFor();
+/** Ticks a todo back on, once what its command published is out. */
+async function untick(page: Page, text: string) {
+	const answered = page.waitForResponse(endsWith("/toggle"));
+	await page.getByLabel(text).uncheck();
+	await answered;
+}
+
+const shownDone = (page: Page, text: string, done = true) =>
+	page.getByRole("checkbox", { name: text, checked: done }).waitFor();
+
+/** Resolves once the screen's next read-again has landed. */
+const readsAgain = (page: Page) =>
+	page.waitForRequest(/\/readAgain$/).then((request) => request.response());
 
 /** The example's bindings, as the test reaches them from outside the Worker. */
 type Env = {
@@ -214,6 +225,40 @@ describe("followChanges", { timeout: 15_000 }, () => {
 		await app.getWorker().scheduled({ cron: "* * * * *" });
 		await shownDone(bob, "Water the cactus");
 		expect(await outbox()).toEqual([]);
+		await closeAll(ana, bob);
+	});
+
+	it("lets the next read go when one has no answer within 15 s, and reads again after its late answer", async () => {
+		const ana = await openScreen();
+		let holding = false;
+		const held = Promise.withResolvers<() => Promise<void>>();
+		const bob = await openScreen(async (page) => {
+			await page.clock.install();
+			await page.route(/\/readAgain$/, async (route) => {
+				if (!holding) return route.continue();
+				holding = false;
+				// Answered by the server now, delivered when the test says.
+				const response = await route.fetch();
+				held.resolve(() => route.fulfill({ response }));
+			});
+		});
+		await add(ana, "Feed the cat");
+		await bob.getByLabel("Feed the cat").waitFor();
+
+		holding = true;
+		await tick(ana, "Feed the cat");
+		const deliverLate = await held.promise;
+		await untick(ana, "Feed the cat");
+		const next = readsAgain(bob);
+		await bob.clock.runFor(15_000);
+		await next;
+		await shownDone(bob, "Feed the cat", false);
+
+		// The held answer says the todo is done, which it no longer is.
+		const again = readsAgain(bob);
+		await deliverLate();
+		await again;
+		await shownDone(bob, "Feed the cat", false);
 		await closeAll(ana, bob);
 	});
 

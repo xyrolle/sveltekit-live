@@ -3,6 +3,12 @@ import { TOLD_AT_MOST, type Told } from "./hint.ts";
 /** The least time between two reads, so a burst of hints costs two at most. */
 const WINDOW_MS = 500;
 
+/** How long a read may go unanswered before it counts as failed and the next may go. */
+const ANSWER_WITHIN_MS = 15_000;
+
+/** What a read is told: each kind whole (`true`), or the records named. */
+type Heard = Map<string, true | Set<string>>;
+
 /** When a screen reads again what it was told (`readingOf`). */
 export type Reading = {
 	/** Something of `kind` changed: the record `id`, or the kind whole. */
@@ -18,12 +24,14 @@ export type Reading = {
  * way at a time; what is told meanwhile waits until it has landed and
  * `WINDOW_MS` has passed since it was sent. What a failed read was told is
  * kept, to be read with the next hint or once the socket is back, never on
- * a timer.
+ * a timer. A read with no answer within `ANSWER_WITHIN_MS` counts as failed,
+ * so that the network holding one does not hold every read after it.
  */
 export function readingOf(read: (told: Told) => Promise<unknown>): Reading {
-	let pending = new Map<string, true | Set<string>>();
+	let pending: Heard = new Map();
 	let reading = false;
 	let window: ReturnType<typeof setTimeout> | undefined;
+	let unanswered: ReturnType<typeof setTimeout> | undefined;
 	let queued = false;
 	let kept = false;
 	let toldSinceSent = false;
@@ -45,6 +53,22 @@ export function readingOf(read: (told: Told) => Promise<unknown>): Reading {
 		named.add(id);
 		pending.set(kind, named.size > TOLD_AT_MOST ? true : named);
 	};
+	const tell = (kind: string, id: string | undefined) => {
+		add(kind, id);
+		toldSinceSent = true;
+		kept = false;
+		schedule();
+	};
+	const fail = (told: Heard, failure: unknown) => {
+		console.error(
+			"sveltekit-live: reading again failed. It is read again with the next hint, or once the socket is back.",
+			failure,
+		);
+		reading = false;
+		for (const [kind, id] of each(told)) add(kind, id);
+		kept = !toldSinceSent;
+		schedule();
+	};
 	const next = () => {
 		queued = false;
 		if (stopped || reading || window || kept || pending.size === 0) return;
@@ -56,33 +80,33 @@ export function readingOf(read: (told: Told) => Promise<unknown>): Reading {
 			window = undefined;
 			schedule();
 		}, WINDOW_MS);
+		let late = false;
+		unanswered = setTimeout(() => {
+			late = true;
+			fail(told, new Error(`No answer within ${ANSWER_WITHIN_MS} ms.`));
+		}, ANSWER_WITHIN_MS);
 		read(wireOf(told)).then(
 			() => {
+				// Kit puts a late answer in whenever it lands, maybe over a
+				// newer one: what it was told is read again after it.
+				if (late) {
+					for (const [kind, id] of each(told)) tell(kind, id);
+					return;
+				}
+				clearTimeout(unanswered);
 				reading = false;
 				schedule();
 			},
 			(failure: unknown) => {
-				console.error(
-					"sveltekit-live: reading again failed. It is read again with the next hint, or once the socket is back.",
-					failure,
-				);
-				reading = false;
-				for (const [kind, ids] of told) {
-					for (const id of ids === true ? [undefined] : ids) add(kind, id);
-				}
-				kept = !toldSinceSent;
-				schedule();
+				if (late) return;
+				clearTimeout(unanswered);
+				fail(told, failure);
 			},
 		);
 	};
 
 	return {
-		tell(kind, id) {
-			add(kind, id);
-			toldSinceSent = true;
-			kept = false;
-			schedule();
-		},
+		tell,
 		recover() {
 			kept = false;
 			schedule();
@@ -90,11 +114,19 @@ export function readingOf(read: (told: Told) => Promise<unknown>): Reading {
 		stop() {
 			stopped = true;
 			clearTimeout(window);
+			clearTimeout(unanswered);
 		},
 	};
 }
 
-function wireOf(told: Map<string, true | Set<string>>): Told {
+/** Each kind a read was told, with each record it named, or none for the kind whole. */
+function* each(told: Heard): Generator<[string, string | undefined]> {
+	for (const [kind, ids] of told) {
+		for (const id of ids === true ? [undefined] : ids) yield [kind, id];
+	}
+}
+
+function wireOf(told: Heard): Told {
 	return Object.fromEntries(
 		[...told].map(([kind, ids]) => [kind, ids === true ? true : [...ids]]),
 	);

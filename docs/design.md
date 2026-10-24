@@ -125,6 +125,7 @@ A session that expires on its own gives the app no moment to call `disconnect`: 
 - **One request:** the hints of a task are gathered and read in one `readAgain(told).updates(...reads)`, with only the reads that follow a told kind. Kit sends every instance of them the screen holds, with its argument. The server refreshes the instances that heard a hint and ignores the others, which keep their answers.
 - **One request at a time:** what is told while one is on its way waits until it has landed and 500 ms have passed since it was sent. A burst costs two reads at most, however fast they answer.
 - **Failures are kept:** a request that fails keeps what it was told, to be read with the next hint or once the socket is back. Nothing retries on a timer, and nothing polls.
+- **An unanswered request is bounded:** one with no answer within 15 s counts as failed, so the next may go, and a request the network holds no longer holds every read after it. Kit puts a command's answer in whenever it lands, so a late answer can land over a newer one: what it was told is read again after it. The request itself cannot be called off, as Kit's commands take no signal.
 - **Liveness:** it pings every 30 s and gives the socket up when no pong comes within 10 s; it reconnects after 1 s, doubling to 30 s, with jitter.
 - **An older build:** when hello's version is not this tab's, it calls Kit's `updated.check()`. The reload is the app's, because only the app knows its drafts; Kit's documented `beforeNavigate` pattern loads the new build at the next navigation.
 
