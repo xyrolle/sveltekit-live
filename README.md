@@ -145,7 +145,7 @@ export const GET: RequestHandler = ({ request, locals }) =>
 	connect(request, { hub: env.LIVE.getByName("board"), user: locals.user });
 ```
 
-When a user loses access (they signed out, or were removed), the app closes their sockets on every hub they hear. Each of their screens reconnects, and the route admits again only those it still would:
+An app whose sessions expire also passes when, `connect(request, { hub, user, expires: session.expiresAt })`, and the hub closes the socket then. When a user loses access before that (they signed out, or were removed), the app closes their sockets on every hub they hear. Each of their screens reconnects, and the route admits again only those it still would:
 
 ```ts
 await disconnect(env.LIVE.getByName(tenant), user);
@@ -198,7 +198,7 @@ In the example, `pnpm dev` runs it under Vite, where a tab sees another's change
 - **`Register`** (`sveltekit-live`): what the app's `app.d.ts` declares: `kind`, the union of its kinds. Undeclared, a kind is any string.
 - **`publish(hub, hints)`** (`sveltekit-live/server`): sends the hints, numbered, to every socket on `hub`. Under `vite dev` it does nothing.
 - **`readAgainCommand(followed)`** (`sveltekit-live/server`): the command that screens read again through. Each read refreshes through its own query and that query's checks; the command has no guard of its own. It answers with the kinds and records of the reads that failed, which the screen keeps to read again. A refusal (4xx) is a read's own answer, not a failure.
-- **`connect(request, { hub, user })`** (`sveltekit-live/server`): hands the socket to `hub`, for `user`. It answers 426 to a request that is no WebSocket upgrade, and 403 to one from another origin.
+- **`connect(request, { hub, user, expires })`** (`sveltekit-live/server`): hands the socket to `hub`, for `user`. Given when the user's session `expires`, the hub closes the socket then, and the screen reconnects to be admitted again, or refused. It answers 426 to a request that is no WebSocket upgrade, and 403 to one from another origin.
 - **`disconnect(hub, user)`** (`sveltekit-live/server`): closes every socket of `user` on `hub`: none of them hears anything more. Each screen reconnects, and one the socket route refuses keeps retrying, as after any lost connection. Under `vite dev` it does nothing.
 - **`followChanges({ socket, followed, readAgain })`** (`sveltekit-live/client`): called once, in the root layout. It opens one socket per tab, to the route at `socket`, and answers with the screen's `Freshness`. Under `vite dev` it opens none, and reads everything again whenever the tab is shown again.
 - **`Freshness`** (`sveltekit-live/client`): `staleSince`, since when the screen may be out of date, once that has lasted 15 s, or `undefined` while it is current (reactive); and `retry()`, which reconnects at once if the socket is down and reads again what failed. Under `vite dev` it is always current.
@@ -210,7 +210,7 @@ In the example, `pnpm dev` runs it under Vite, where a tab sees another's change
 - Changes from other tabs and users reach a screen as they happen only in the built Worker: under `vite dev` there are no Durable Objects, so `publish` does nothing and a screen reads everything again when it is shown again. Build, then run `wrangler dev`.
 - Sockets are for browsers. `connect` refuses a request whose `Origin` is not the app's own, including one with no `Origin`.
 - A hint without a `userId` reaches every socket on its hub: its kind and id are visible to every user connected there, as metadata, never data. Users who must not see each other's activity (staff and customers, say) belong on separate hubs, `` getByName(`${tenant}:staff`) ``, with each change published to every hub that should hear it.
-- Access is checked at the handshake, and again when the app disconnects a user. A session that expires on its own gives the app no moment to call `disconnect`: its screens hear hints (never data) until their sockets drop.
+- Access is checked at the handshake. Afterwards a socket closes when the app disconnects its user, or when the session `connect` was given expires. The screen then reconnects and is admitted again, or refused.
 - A command that publishes without an outbox (step 4) loses its change's hints if the Worker dies after the commit, and nothing notices, as no number was taken.
 - The user id is the socket's one hibernation tag: at most 256 characters. A hub holds at most 32,768 sockets.
 - A query missing from `followed` is not live, and nothing checks that the list is complete.

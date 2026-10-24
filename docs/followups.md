@@ -2,12 +2,6 @@
 
 What the first version leaves out (`docs/design.md`), and what it found along the way.
 
-## Close the sockets of a session that expired
-
-A session that ends on its own (it expires) gives the app no moment to call `disconnect`: its screens hear hints (never data) until their sockets drop.
-
-Done when: a socket closes once the session it was opened under has expired, with no call from the app, tested in workerd.
-
 ## Let go of what a screen read ahead
 
 A screen that holds reads offscreen (the next week of a calendar) reads them again on every hint of their kind.

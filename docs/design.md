@@ -101,20 +101,20 @@ Rejected: an outbox in the library, which would own a table in whatever database
 
 ### The socket route
 
-The app's own `GET` handler decides who the user is and which hub they hear, or refuses with Kit's `error()`, then calls `connect(request, { hub, user })`. It refuses a request that is not an upgrade (426) or comes from another origin (403: a browser sends cookies with a WebSocket handshake to any site and applies no CORS to it), and forwards the upgrade with the user and Kit's `version`.
+The app's own `GET` handler decides who the user is and which hub they hear, or refuses with Kit's `error()`, then calls `connect(request, { hub, user })`. It refuses a request that is not an upgrade (426) or comes from another origin (403: a browser sends cookies with a WebSocket handshake to any site and applies no CORS to it), and forwards the upgrade with the user, Kit's `version` and, if given, when the session expires.
 
 Rejected: `connect(authorize)` returning the handler. The callback did nothing the app's handler does not, and keeping Kit's full `RequestEvent` in it took a generic.
 
 ### Closing a user's sockets
 
-Access is checked at the handshake. When the app ends a user's access (a sign-out, a removal), it calls `disconnect(hub, user)`, and the hub closes every socket tagged with that user. Each screen reconnects, and the socket route admits again only those it still would: another device of the user, still signed in, comes back having missed nothing, and reads nothing. So the hub keeps no sessions and decides nothing.
+Access is checked at the handshake. When the app ends a user's access (a sign-out, a removal), it calls `disconnect(hub, user)`, and the hub closes every socket tagged with that user. Each screen reconnects, and the socket route admits again only those it still would: another device of the user, still signed in, comes back having missed nothing, and reads nothing. So the hub decides nothing.
 
 Rejected:
 
 - tagging each socket with its session, to close only the session that ended: the user's other screens come back for one handshake each, and the hub needs no second tag;
 - checking access before each publication: the library knows no sessions, and an app's rule cannot run in the hub.
 
-A session that expires on its own gives the app no moment to call `disconnect`: its screens hear hints until their sockets drop (follow-up).
+A session that expires on its own gives the app no moment to call `disconnect`. So `connect` takes when it `expires`, and the hub keeps that with the socket, in its serialized attachment, which survives hibernation; tags only find sockets. One alarm, set for the earliest expiry, closes what has expired when it goes off, and sets itself for the next. A session the app extends meanwhile (a sliding expiry) costs its screen one reconnect, which the route admits again.
 
 ### The follower
 
@@ -162,5 +162,4 @@ Kit's remote functions are still experimental, so the app enables `experimental.
 
 What comes after this core goes in `docs/followups.md`:
 
-- closing the sockets of a session that expired on its own;
 - dropping data a screen read ahead (the next week) instead of reading it again.
