@@ -71,7 +71,7 @@ Kit replaces a remote module with stubs in the browser and allows only remote fu
 
 So the app lists them in one module both sides import. A read that follows one record names it with a function of its argument, `{ kind, id: (arg) => arg.id }`, typed by the query. A function, not a field name, because many queries take the id itself (`getPost(slug)`). A query missing from the list is simply not live.
 
-Rejected: a Vite plugin or code generation (the source app generates the list from its own procedure builder). A list is less machinery and reads like a route table.
+Rejected: a Vite plugin or code generation. A list is less machinery and reads like a route table.
 
 ### Kinds are declared once, as a type
 
@@ -110,7 +110,7 @@ Access is checked at the handshake. When the app ends a user's access (a sign-ou
 Rejected:
 
 - tagging each socket with its session, to close only the session that ended: the user's other screens come back for one handshake each, and the hub needs no second tag;
-- checking access before each publication, as the source app does against its database: the library knows no sessions, and an app's rule cannot run in the hub.
+- checking access before each publication: the library knows no sessions, and an app's rule cannot run in the hub.
 
 A session that expires on its own gives the app no moment to call `disconnect`: its screens hear hints until their sockets drop (follow-up).
 
@@ -142,7 +142,7 @@ Kit's remote functions are still experimental, so the app enables `experimental.
 
 ## Left out of the first version
 
-What the source app does beyond this core goes in `docs/followups.md`:
+What comes after this core goes in `docs/followups.md`:
 
 - closing the sockets of a session that expired on its own;
 - an outbox, so a committed change is always published;
