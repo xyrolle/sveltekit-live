@@ -2,11 +2,11 @@
 
 What the first version leaves out (`docs/design.md`), and what it found along the way.
 
-## Close the sockets of someone who lost access
+## Close the sockets of a session that expired
 
-A socket is checked once, at its handshake, and outlives the session it was opened under. Until it closes, it hears hints (never data).
+A session that ends on its own (it expires) gives the app no moment to call `disconnect`: its screens hear hints (never data) until their sockets drop.
 
-Done when: the app can have a hub close one user's sockets, and a workerd test shows that user hears nothing more.
+Done when: a socket closes once the session it was opened under has expired, with no call from the app, tested in workerd.
 
 ## Publish every committed change
 

@@ -88,6 +88,12 @@ export const GET: RequestHandler = ({ request, locals }) =>
 	connect(request, { hub: env.LIVE.getByName("board"), user: locals.user });
 ```
 
+When a user loses access (they signed out, or were removed), the app closes their sockets on every hub they hear. Each of their screens reconnects, and the route admits again only those it still would:
+
+```ts
+await disconnect(env.LIVE.getByName(tenant), user);
+```
+
 **6. The root layout follows changes:**
 
 ```svelte
@@ -109,6 +115,7 @@ In the example, `pnpm dev` runs it under Vite, where each tab sees its own chang
 - **`publish(hub, hints)`** (`sveltekit-live/server`): sends the hints, numbered, to every socket on `hub`. Under `vite dev` it does nothing.
 - **`readAgainCommand(followed)`** (`sveltekit-live/server`): the command that screens read again through. Each read refreshes through its own query and that query's checks; the command has no guard of its own.
 - **`connect(request, { hub, user })`** (`sveltekit-live/server`): hands the socket to `hub`, for `user`. It answers 426 to a request that is no WebSocket upgrade, and 403 to one from another origin.
+- **`disconnect(hub, user)`** (`sveltekit-live/server`): closes every socket of `user` on `hub`: none of them hears anything more. Each screen reconnects, and one the socket route refuses keeps retrying, as after any lost connection. Under `vite dev` it does nothing.
 - **`followChanges({ socket, followed, readAgain })`** (`sveltekit-live/client`): called once, in the root layout. It opens one socket per tab, to the route at `socket`.
 - **`LiveHub`** (`sveltekit-live/hub`): the Durable Object that holds a tenant's sockets.
 
@@ -117,7 +124,7 @@ In the example, `pnpm dev` runs it under Vite, where each tab sees its own chang
 - Changes from other tabs and users need the built Worker: under `vite dev` there are no Durable Objects, so `publish` and `followChanges` do nothing. Build, then run `wrangler dev`.
 - Sockets are for browsers. `connect` refuses a request whose `Origin` is not the app's own, including one with no `Origin`.
 - A hint without a `userId` reaches every socket on its hub: its kind and id are visible to every user connected there, as metadata, never data. Users who must not see each other's activity (staff and customers, say) belong on separate hubs, `` getByName(`${tenant}:staff`) ``, with each change published to every hub that should hear it.
-- Access is checked once, at the handshake. A socket outlives the session it was opened under, until it closes.
+- Access is checked at the handshake, and again when the app disconnects a user. A session that expires on its own gives the app no moment to call `disconnect`: its screens hear hints (never data) until their sockets drop.
 - A change whose publication never happens (the Worker died after the commit) goes unnoticed, as no number was taken.
 - The user id is the socket's one hibernation tag: at most 256 characters. A hub holds at most 32,768 sockets.
 - A query missing from `followed` is not live, and nothing checks that the list is complete.

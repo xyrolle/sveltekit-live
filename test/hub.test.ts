@@ -32,11 +32,16 @@ const server = createTestHarness({
 /** The test Worker (./worker/index.ts), as the tests call it. */
 interface TestApp extends Rpc.WorkerEntrypointBranded {
 	publish(tenant: string, hints: Hint[]): void;
+	disconnect(tenant: string, user: string): void;
 }
 const worker = server.getWorker<Record<string, never>, { default: TestApp }>();
 /** Publishes to a tenant's hub, as an app's command does. */
 async function publish(tenant: string, hints: Hint[]): Promise<void> {
 	await (await worker.getExport()).publish(tenant, hints);
+}
+/** Closes a user's sockets on a tenant's hub, as an app does once their access ended. */
+async function disconnect(tenant: string, user: string): Promise<void> {
+	await (await worker.getExport()).disconnect(tenant, user);
 }
 
 // Starting workerd takes a few seconds.
@@ -75,6 +80,12 @@ async function caughtUp(socket: Socket): Promise<void> {
 	socket.send(PING);
 	await pong;
 }
+
+/** Resolves with the code the hub closes the socket with. */
+const closed = (socket: Socket) =>
+	new Promise<number>((resolve) =>
+		socket.addEventListener("close", ({ code }) => resolve(code)),
+	);
 
 const publications = (frames: (Hello | Publication)[]) =>
 	frames.filter((frame) => "hints" in frame);
@@ -154,13 +165,33 @@ describe("LiveHub", () => {
 		]);
 	});
 
+	it("closes the sockets of a user who lost access, who hears nothing more", async () => {
+		const phone = await open("access", "ana");
+		const laptop = await open("access", "ana");
+		const bob = await open("access", "bob");
+		// workerd ends a hibernated socket that has sent no frame ten seconds
+		// after closing it (cloudflare/workerd#7566); a screen's pings are frames.
+		for (const { socket } of [phone, laptop]) await caughtUp(socket);
+		const codes = Promise.all(
+			[phone, laptop].map(({ socket }) => closed(socket)),
+		);
+		await disconnect("access", "ana");
+		await publish("access", [{ kind: "todo" }]);
+
+		expect(await codes).toEqual([1008, 1008]);
+		await caughtUp(bob.socket);
+		expect(publications(phone.frames)).toEqual([]);
+		expect(publications(laptop.frames)).toEqual([]);
+		expect(publications(bob.frames)).toEqual([
+			{ n: 1, hints: [{ kind: "todo" }] },
+		]);
+	});
+
 	it("closes a socket that says anything but a ping", async () => {
 		const { socket } = await open("listening", "ana");
-		const closed = new Promise<number>((resolve) =>
-			socket.addEventListener("close", ({ code }) => resolve(code)),
-		);
+		const code = closed(socket);
 		socket.send("hello");
-		expect(await closed).toBe(1008);
+		expect(await code).toBe(1008);
 	});
 });
 

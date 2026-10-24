@@ -1,5 +1,6 @@
 import { WorkerEntrypoint } from "cloudflare:workers";
 import { connect } from "../../src/connect.ts";
+import { disconnect } from "../../src/disconnect.ts";
 import type { Hint } from "../../src/hint.ts";
 import type { LiveHub } from "../../src/hub.ts";
 import { publish } from "../../src/publish.ts";
@@ -11,7 +12,8 @@ type Env = { LIVE: DurableObjectNamespace<LiveHub> };
 /**
  * An app, reduced to what the tests choose: its socket route takes the tenant
  * and the user from the address, where an app would take them from a
- * session, and its commands publish through `publish`.
+ * session, its commands publish through `publish`, and it disconnects a
+ * user who lost access through `disconnect`.
  */
 export default class TestApp extends WorkerEntrypoint<Env> {
 	override fetch(request: Request): Promise<Response> | Response {
@@ -26,5 +28,9 @@ export default class TestApp extends WorkerEntrypoint<Env> {
 
 	publish(tenant: string, hints: Hint[]): Promise<void> {
 		return publish(this.env.LIVE.getByName(tenant), hints);
+	}
+
+	disconnect(tenant: string, user: string): Promise<void> {
+		return disconnect(this.env.LIVE.getByName(tenant), user);
 	}
 }
