@@ -303,6 +303,46 @@ describe("followChanges", { timeout: 15_000 }, () => {
 		await closeAll(ana, bob);
 	});
 
+	it("takes a read's refusal as its answer, not as a read to do again", async () => {
+		const ana = await openScreen();
+		const sockets: WebSocketRoute[] = [];
+		const bob = await openScreen((page) =>
+			page.routeWebSocket(/\/live$/, (socket) => {
+				sockets.push(socket);
+				socket.connectToServer();
+			}),
+		);
+		let sent = 0;
+		bob.on("request", (request) => {
+			if (request.url().endsWith("/readAgain")) sent += 1;
+		});
+		await add(ana, "Sell the bike");
+		await bob.getByLabel("Sell the bike").waitFor();
+
+		// Deleted: Bob's read of it is refused (404), which is its answer.
+		const id = await idOf("Sell the bike");
+		await (await database())
+			.prepare("delete from todos where id = ?")
+			.bind(id)
+			.run();
+		const { LIVE } = await app.getWorker<Env>().getEnv();
+		const refused = readsAgain(bob);
+		await LIVE.getByName("board").publish([{ kind: "todo", id }]);
+		await refused;
+		const before = sent;
+
+		const hello = bob
+			.waitForEvent("websocket")
+			.then((socket) => socket.waitForEvent("framereceived"));
+		await sockets[0]?.close();
+		await hello;
+		await LIVE.getByName("board").publish([{ kind: "todos" }]);
+		await bob.getByLabel("Sell the bike").waitFor({ state: "detached" });
+		// One read, the list's: the socket's return read nothing kept.
+		expect(sent).toBe(before + 1);
+		await closeAll(ana, bob);
+	});
+
 	it("has Kit check for a newer build when the hub's hello names one", async () => {
 		const newer = (frame: string) =>
 			frame.replace(/"version":"[^"]*"/, '"version":"newer"');
