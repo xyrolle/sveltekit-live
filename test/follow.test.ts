@@ -6,19 +6,21 @@ import {
 	type Page,
 	type WebSocketRoute,
 } from "playwright";
-import { afterAll, beforeAll, describe, it } from "vitest";
-import { createTestHarness } from "wrangler";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createTestHarness, experimental_readRawConfig } from "wrangler";
+
+const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
 // The example app (examples/todos), built by `pnpm test`, in workerd, and
 // screens of it in a real browser: each its own user, in a context of its own.
+// Its Worker runs as configured, but for a hub that a test can have refuse a
+// publication (./worker/todos.js).
+const { rawConfig } = experimental_readRawConfig({
+	config: here("../examples/todos/wrangler.jsonc"),
+});
 const app = createTestHarness({
-	workers: [
-		{
-			configPath: fileURLToPath(
-				new URL("../examples/todos/wrangler.jsonc", import.meta.url),
-			),
-		},
-	],
+	root: here("../examples/todos"),
+	workers: [{ config: { ...rawConfig, main: here("worker/todos.js") } }],
 });
 let origin: URL;
 let browser: Browser;
@@ -68,19 +70,33 @@ async function add(page: Page, text: string) {
 	await page.getByLabel(text).waitFor();
 }
 
-/** Ticks a todo off, once its command has answered: what it published is out. */
+/** Ticks a todo off, and answers with its command's answer, once what it published is out. */
 async function tick(page: Page, text: string) {
 	const answered = page.waitForResponse(endsWith("/toggle"));
 	await page.getByLabel(text).check();
-	await answered;
+	return (await answered).json();
 }
 
 const shownDone = (page: Page, text: string) =>
 	page.getByRole("checkbox", { name: text, checked: true }).waitFor();
 
-/** The example's database, as the test reaches it from outside the Worker. */
+/** The example's bindings, as the test reaches them from outside the Worker. */
+type Env = {
+	DB: D1Database;
+	LIVE: { getByName(name: string): { refuseNext(): Promise<void> } };
+};
+
+/** The example's database. */
 async function database(): Promise<D1Database> {
-	return (await app.getWorker<{ DB: D1Database }>().getEnv()).DB;
+	return (await app.getWorker<Env>().getEnv()).DB;
+}
+
+/** The hints the outbox holds, not yet published. */
+async function outbox(): Promise<string[]> {
+	const { results } = await (await database())
+		.prepare("select hints from outbox")
+		.all<{ hints: string }>();
+	return results.map(({ hints }) => hints);
 }
 
 /** The id of the todo of `text`. */
@@ -179,6 +195,26 @@ describe("followChanges", { timeout: 15_000 }, () => {
 
 		await shownDone(bob, "Pay the rent");
 		await closeAll(bob);
+	});
+
+	it("keeps what the hub refused for the cron, and answers the command that committed it", async () => {
+		const ana = await openScreen();
+		const bob = await openScreen();
+		await add(ana, "Water the cactus");
+		await bob.getByLabel("Water the cactus").waitFor();
+
+		const { LIVE } = await app.getWorker<Env>().getEnv();
+		await LIVE.getByName("board").refuseNext();
+		expect(await tick(ana, "Water the cactus")).toMatchObject({
+			type: "result",
+		});
+		const id = await idOf("Water the cactus");
+		expect(await outbox()).toEqual([JSON.stringify([{ kind: "todo", id }])]);
+
+		await app.getWorker().scheduled({ cron: "* * * * *" });
+		await shownDone(bob, "Water the cactus");
+		expect(await outbox()).toEqual([]);
+		await closeAll(ana, bob);
 	});
 
 	it("has Kit check for a newer build when the hub's hello names one", async () => {
