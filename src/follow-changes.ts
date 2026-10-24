@@ -4,7 +4,7 @@ import type { RemoteCommand } from "$app/server";
 import { updated } from "$app/state";
 import type { Followed } from "./follows.ts";
 import type { Hello, Hint, Publication, Told } from "./hint.ts";
-import { readingOf } from "./reading.ts";
+import { type Reading, readingOf } from "./reading.ts";
 import { keepOpen } from "./socket.ts";
 
 /**
@@ -25,6 +25,23 @@ import { keepOpen } from "./socket.ts";
  */
 export function followChanges(options: Options): void {
 	onMount(() => (dev ? undefined : follow(options)));
+}
+
+/** The tab's follower, while its root layout is mounted. */
+let following: Reading | undefined;
+
+/**
+ * Runs a command after the follower's read on its way, and holds the
+ * follower's next read until it lands. A command that also refreshes its
+ * own screen's reads goes through it, so that neither its answer nor the
+ * follower's can land over a newer one:
+ *
+ *     onchange={() => inTurn(() => toggle(id))}
+ *
+ * Without a follower (under `vite dev`) it runs the command at once.
+ */
+export function inTurn<T>(work: () => Promise<T>): Promise<T> {
+	return following ? following.turn(work) : work();
 }
 
 /** The app's socket route, its followed reads, and the command that reads them again. */
@@ -71,9 +88,11 @@ function follow({ socket, followed, readAgain }: Options): () => void {
 			else for (const { kind, id } of frame.hints) reading.tell(kind, id);
 		}
 	});
+	following = reading;
 	return () => {
 		close();
 		reading.stop();
+		following = undefined;
 	};
 }
 

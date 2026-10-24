@@ -20,12 +20,6 @@ While the socket is down, or after a read-again failed, a screen shows what it r
 
 Done when: `followChanges` exposes whether the screen may be out of date and since when, with a Retry, and the example shows it.
 
-## Keep a page's own refreshes in line with the follower's
-
-A page that refreshes a read itself while the follower's read-again is on its way can show the older answer until the next hint.
-
-Done when: the two cannot land out of order, tested in the browser.
-
 ## Let go of what a screen read ahead
 
 A screen that holds reads offscreen (the next week of a calendar) reads them again on every hint of their kind.
