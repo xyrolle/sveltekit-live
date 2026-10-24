@@ -154,6 +154,8 @@ Rejected: a hub in the dev server, which would take a second runtime beside Vite
 
 `sveltekit-live/server` and `/client` import `$app/*`, so the package is a SvelteKit library compiled with the app through Vite. `sveltekit-live/hub` imports only `cloudflare:workers`, as Wrangler bundles the Worker entry outside Vite. Peer dependencies: `@sveltejs/kit` and `svelte`.
 
+Worker code that Vite doesn't build, such as a cron, a queue consumer or another Durable Object, is where an outbox drains. It calls the hub's own `publish(hints)` and `disconnect(user)` on the stub. The functions of `sveltekit-live/server` call the same methods, and add only a no-op under `vite dev`, where there is no hub; for that they import `$app/env`, which only Vite resolves. Rejected: a `publish` in `sveltekit-live/hub` as well, which would be a second name for the same call.
+
 Kit's remote functions are still experimental, so the app enables `experimental.remoteFunctions`.
 
 ## Left out of the first version

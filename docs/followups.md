@@ -8,12 +8,6 @@ A session that ends on its own (it expires) gives the app no moment to call `dis
 
 Done when: a socket closes once the session it was opened under has expired, with no call from the app, tested in workerd.
 
-## Publish from code Vite doesn't build
-
-`publish` imports `$app/env`, which only Vite resolves. Plain Worker code, such as a cron, a queue consumer or a Durable Object, is where an outbox drains, so the example's cron calls the hub itself (`worker.js`).
-
-Done when: `publish`, or a sibling entry, runs from `worker.js`, and the example's cron uses it.
-
 ## Let go of what a screen read ahead
 
 A screen that holds reads offscreen (the next week of a calendar) reads them again on every hint of their kind.
