@@ -127,6 +127,7 @@ A session that expires on its own gives the app no moment to call `disconnect`: 
 - **Failures are kept:** a request that fails keeps what it was told, to be read with the next hint or once the socket is back, and so does a request that succeeds for what it answers it could not read in. Nothing retries on a timer, and nothing polls.
 - **An unanswered request is bounded:** one with no answer within 15 s counts as failed, so the next may go, and a request the network holds no longer holds every read after it. Kit puts a command's answer in whenever it lands, so a late answer can land over a newer one: what it was told is read again after it. The request itself cannot be called off, as Kit's commands take no signal.
 - **Liveness:** it pings every 30 s and gives the socket up when no pong comes within 10 s; it reconnects after 1 s, doubling to 30 s, with jitter.
+- **Saying when it may be out of date:** from the moment the socket is lost or a read fails, until the socket is back and the reads it calls for have landed, the screen shows what it read last. `followChanges` answers with `staleSince`, but only once that has lasted 15 s, past a reconnect or two, so a blip says nothing. A reconnect alone does not clear it. Retry reconnects at once and reads what failed in the same line as every read; nothing retries on a timer. The bound runs whether the tab is shown or not, as a hidden tab keeps its socket and reconnects as a shown one does.
 - **An older build:** when hello's version is not this tab's, it calls Kit's `updated.check()`. The reload is the app's, because only the app knows its drafts; Kit's documented `beforeNavigate` pattern loads the new build at the next navigation.
 
 ### A page's own commands go in turn
@@ -158,6 +159,5 @@ Kit's remote functions are still experimental, so the app enables `experimental.
 What comes after this core goes in `docs/followups.md`:
 
 - closing the sockets of a session that expired on its own;
-- a stale notice with Retry while the socket is down or a read failed;
 - dropping data a screen read ahead (the next week) instead of reading it again;
 - re-reading when a tab is shown again under `vite dev`.
