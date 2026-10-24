@@ -15,6 +15,28 @@ export type Reading = {
 	stop(): void;
 };
 
+/** A read on its way: what it was told, and whether more was told since. */
+type OnItsWay = {
+	is: "reading";
+	told: Heard;
+	toldSince: boolean;
+	/** What makes it count as failed, `ANSWER_WITHIN_MS` after it was sent. */
+	unanswered: ReturnType<typeof setTimeout>;
+};
+
+/**
+ * Where a screen's reading stands: nothing on its way (`idle`), a read on
+ * its way (`reading`), the window since the last read was sent (`pausing`),
+ * or a read that failed with nothing told since, whose kinds wait for a hint
+ * or the socket (`kept`).
+ */
+type State =
+	| { is: "idle" }
+	| OnItsWay
+	| { is: "pausing"; until: ReturnType<typeof setTimeout> }
+	| { is: "kept" }
+	| { is: "stopped" };
+
 /**
  * Decides when a screen reads again what it was told. What is told is read
  * at the end of the task that told it, all in one `read`. One read is on its
@@ -27,14 +49,10 @@ export type Reading = {
  * not hold every read after it.
  */
 export function readingOf(read: (told: Told) => Promise<Told>): Reading {
+	let state: State = { is: "idle" };
 	let pending: Heard = new Map();
-	let reading = false;
-	let window: ReturnType<typeof setTimeout> | undefined;
-	let unanswered: ReturnType<typeof setTimeout> | undefined;
+	let sentAt = Number.NEGATIVE_INFINITY;
 	let queued = false;
-	let kept = false;
-	let toldSinceSent = false;
-	let stopped = false;
 
 	const schedule = () => {
 		if (queued) return;
@@ -54,78 +72,89 @@ export function readingOf(read: (told: Told) => Promise<Told>): Reading {
 	};
 	const tell = (kind: string, id: string | undefined) => {
 		add(kind, id);
-		toldSinceSent = true;
-		kept = false;
-		schedule();
-	};
-	const fail = (told: ToldEntries, failure: unknown) => {
-		console.error(
-			"sveltekit-live: reading again failed. It is read again with the next hint, or once the socket is back.",
-			failure,
-		);
-		reading = false;
-		for (const [kind, id] of each(told)) add(kind, id);
-		kept = !toldSinceSent;
+		if (state.is === "reading") state.toldSince = true;
+		if (state.is === "kept") state = { is: "idle" };
 		schedule();
 	};
 	const next = () => {
 		queued = false;
-		if (stopped || reading || window || kept || pending.size === 0) return;
-		const told = pending;
+		if (state.is !== "idle" || pending.size === 0) return;
+		const wait = sentAt + WINDOW_MS - Date.now();
+		if (wait > 0) {
+			state = {
+				is: "pausing",
+				until: setTimeout(() => {
+					state = { is: "idle" };
+					schedule();
+				}, wait),
+			};
+			return;
+		}
+		send();
+	};
+	const send = () => {
+		const reading: OnItsWay = {
+			is: "reading",
+			told: pending,
+			toldSince: false,
+			unanswered: setTimeout(() => {
+				const failure = new Error(`No answer within ${ANSWER_WITHIN_MS} ms.`);
+				fail(reading, reading.told, failure);
+			}, ANSWER_WITHIN_MS),
+		};
 		pending = new Map();
-		reading = true;
-		toldSinceSent = false;
-		window = setTimeout(() => {
-			window = undefined;
-			schedule();
-		}, WINDOW_MS);
-		let late = false;
-		unanswered = setTimeout(() => {
-			late = true;
-			fail(told, new Error(`No answer within ${ANSWER_WITHIN_MS} ms.`));
-		}, ANSWER_WITHIN_MS);
-		read(toldOf(told)).then(
-			(unread) => {
-				// Kit puts a late answer in whenever it lands, maybe over a
-				// newer one: what it was told is read again after it.
-				if (late) {
-					for (const [kind, id] of each(told)) tell(kind, id);
-				} else {
-					answered(unread);
-				}
-			},
+		sentAt = Date.now();
+		state = reading;
+		read(toldOf(reading.told)).then(
+			(unread) => landed(reading, unread),
 			(failure: unknown) => {
-				if (late) return;
-				clearTimeout(unanswered);
-				fail(told, failure);
+				if (state === reading) fail(reading, reading.told, failure);
 			},
 		);
 	};
-	/** A read landed, with what the server could not read in, kept as a failed read's. */
-	const answered = (unread: Told) => {
-		clearTimeout(unanswered);
-		const kinds = Object.keys(unread);
-		if (kinds.length > 0) {
-			fail(
-				Object.entries(unread),
-				new Error(`The server could not read ${kinds.join(", ")} again.`),
-			);
+	/** A read landed, answering with what the server could not read in. */
+	const landed = (reading: OnItsWay, unread: Told) => {
+		if (state !== reading) {
+			// It came after its bound. Kit puts it in whenever it lands, maybe
+			// over a newer answer: what it was told is read again after it.
+			for (const [kind, id] of each(reading.told)) tell(kind, id);
 			return;
 		}
-		reading = false;
+		const kinds = Object.keys(unread);
+		if (kinds.length > 0) {
+			const failure = new Error(
+				`The server could not read ${kinds.join(", ")} again.`,
+			);
+			fail(reading, Object.entries(unread), failure);
+			return;
+		}
+		settle(reading, { is: "idle" });
+	};
+	/** What a read could not read in waits for a hint or the socket, unless one came already. */
+	const fail = (reading: OnItsWay, unread: ToldEntries, failure: unknown) => {
+		console.error(
+			"sveltekit-live: reading again failed. It is read again with the next hint, or once the socket is back.",
+			failure,
+		);
+		for (const [kind, id] of each(unread)) add(kind, id);
+		settle(reading, reading.toldSince ? { is: "idle" } : { is: "kept" });
+	};
+	const settle = (reading: OnItsWay, to: State) => {
+		clearTimeout(reading.unanswered);
+		state = to;
 		schedule();
 	};
 
 	return {
 		tell,
 		recover() {
-			kept = false;
+			if (state.is === "kept") state = { is: "idle" };
 			schedule();
 		},
 		stop() {
-			stopped = true;
-			clearTimeout(window);
-			clearTimeout(unanswered);
+			if (state.is === "reading") clearTimeout(state.unanswered);
+			if (state.is === "pausing") clearTimeout(state.until);
+			state = { is: "stopped" };
 		},
 	};
 }
