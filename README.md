@@ -55,6 +55,17 @@ export const followed = [
 
 `todos` is read again after any hint of kind `todos`. `todo(id)` is read again after a hint of kind `todo` that names its id, or that names none.
 
+The kinds are declared once, in `src/app.d.ts`. A kind that is not declared then fails the typecheck, in `follows` and in `publish` alike. An app that declares none takes any string as a kind.
+
+```ts
+// src/app.d.ts
+declare module "sveltekit-live" {
+	interface Register {
+		kind: "todos" | "todo";
+	}
+}
+```
+
 **3. One command reads again:**
 
 ```ts
@@ -111,7 +122,8 @@ In the example, `pnpm dev` runs it under Vite, where each tab sees its own chang
 ## API
 
 - **`follows(read, ...what)`** (`sveltekit-live`): what a remote query follows. Each of `what` is a kind, followed whole, or `{ kind, id }`, where `id(arg)` names the record that the query's argument shows.
-- **`Hint`** (`sveltekit-live`): `{ kind: string; id?: string; userId?: string }`. A hint with a `userId` reaches only that user's sockets.
+- **`Hint`** (`sveltekit-live`): `{ kind; id?: string; userId?: string }`, its `kind` one of the app's kinds. A hint with a `userId` reaches only that user's sockets.
+- **`Register`** (`sveltekit-live`): what the app's `app.d.ts` declares: `kind`, the union of its kinds. Undeclared, a kind is any string.
 - **`publish(hub, hints)`** (`sveltekit-live/server`): sends the hints, numbered, to every socket on `hub`. Under `vite dev` it does nothing.
 - **`readAgainCommand(followed)`** (`sveltekit-live/server`): the command that screens read again through. Each read refreshes through its own query and that query's checks; the command has no guard of its own.
 - **`connect(request, { hub, user })`** (`sveltekit-live/server`): hands the socket to `hub`, for `user`. It answers 426 to a request that is no WebSocket upgrade, and 403 to one from another origin.

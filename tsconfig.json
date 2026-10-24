@@ -28,6 +28,7 @@
 		"src/publish.ts",
 		"src/read-again.ts",
 		"src/server.ts",
-		"test/worker"
+		"test/worker",
+		"test/kinds"
 	]
 }

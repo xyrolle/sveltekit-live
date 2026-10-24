@@ -1,10 +1,8 @@
 import type { RemoteQuery } from "$app/server";
+import type { Kind } from "./hint.ts";
 
-/**
- * What a read follows: every change of a kind, or only the change to the
- * record of a kind that its argument names (`id`).
- */
-export type Follow<Arg> = string | { kind: string; id: (arg: Arg) => string };
+/** What a read follows of a kind: only the change to the record its argument names (`id`). */
+type ByRecord<Arg> = { kind: Kind; id: (arg: Arg) => string };
 
 /**
  * A read that open screens keep live, and what it follows. Made by
@@ -13,7 +11,7 @@ export type Follow<Arg> = string | { kind: string; id: (arg: Arg) => string };
  */
 export type Followed = {
 	read(arg: unknown): RemoteQuery<unknown>;
-	follows: readonly (string | { kind: string; id(arg: unknown): string })[];
+	follows: readonly (Kind | { kind: Kind; id(arg: unknown): string })[];
 };
 
 /** A remote query, whatever its argument. */
@@ -23,7 +21,8 @@ type Query = (arg: never) => RemoteQuery<unknown>;
 type ArgOf<Read extends Query> = Parameters<Read>[0];
 
 /**
- * Declares what a remote query follows. The app lists its live reads in one
+ * Declares what a remote query follows: every change of a kind, or only the
+ * change to the record its argument names. The app lists its live reads in one
  * module that the browser and the server both import:
  *
  *     export const followed = [
@@ -36,7 +35,8 @@ type ArgOf<Read extends Query> = Parameters<Read>[0];
  */
 export function follows<Read extends Query>(
 	read: Read,
-	...what: [Follow<ArgOf<Read>>, ...Follow<ArgOf<Read>>[]]
+	// Spelled out, not aliased, so that an error names the app's kinds.
+	...what: [Kind | ByRecord<ArgOf<Read>>, ...(Kind | ByRecord<ArgOf<Read>>)[]]
 ): Followed {
 	return { read, follows: what };
 }

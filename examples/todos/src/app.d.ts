@@ -7,4 +7,11 @@ declare global {
 	}
 }
 
+// The kinds the example's hints name (src/lib/live.ts, src/lib/todos.remote.ts).
+declare module "sveltekit-live" {
+	interface Register {
+		kind: "todos" | "todo";
+	}
+}
+
 export {};

@@ -4,11 +4,29 @@
 // that something of a kind changed.
 
 /**
+ * What an app declares once, in its `app.d.ts`, so that a misspelled kind
+ * fails its typecheck:
+ *
+ *     declare module "sveltekit-live" {
+ *       interface Register {
+ *         kind: "todos" | "todo";
+ *       }
+ *     }
+ */
+// biome-ignore lint/suspicious/noEmptyInterface: the app's declaration merges into it.
+export interface Register {}
+
+/** A kind of change: one the app declared (`Register`), or any string if it declared none. */
+export type Kind = Register extends { kind: infer Declared extends string }
+	? Declared
+	: string;
+
+/**
  * Something changed: a kind the app names, the one record the change is
  * about (`id`), and the one user whose screens alone should hear it
  * (`userId`).
  */
-export type Hint = { kind: string; id?: string; userId?: string };
+export type Hint = { kind: Kind; id?: string; userId?: string };
 
 /**
  * What a hub says to each socket it takes: where its series of publications
