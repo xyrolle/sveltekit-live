@@ -10,12 +10,13 @@
 		"dev": "wrangler d1 migrations apply DB --local && vite dev",
 		"build": "vite build",
 		"preview": "wrangler d1 migrations apply DB --local && wrangler dev",
-		"typecheck": "wrangler types && svelte-kit sync && svelte-check"
+		"typecheck": "wrangler types && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --tsgo-experimental-api"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-cloudflare": "8.0.1",
 		"@sveltejs/kit": "3.1.0",
 		"@sveltejs/vite-plugin-svelte": "7.3.1",
+		"@typescript/native": "npm:typescript@7.0.2",
 		"svelte": "5.57.2",
 		"svelte-check": "4.7.7",
 		"sveltekit-live": "workspace:*",
