@@ -18,7 +18,15 @@ Done when: `publish`, or a sibling entry, runs from `worker.js`, and the example
 
 A screen that holds reads offscreen (the next week of a calendar) reads them again on every hint of their kind.
 
-Done when: a screen can name the reads it holds ahead, a hint drops them instead of reading them again, and a test shows the drop.
+Kit 3.1's public API leaves no way to drop them instead:
+
+- **An instance can't be dropped on demand.** It stays in Kit's cache while a proxy of it is reachable, or pinned by an effect or an await on it. Once none is, it goes only when the garbage collector finalizes the last proxy.
+- **The follower can't leave them out.** `.updates(query)` asks the server for every cached instance of `query`, the ones read ahead among them. Leaving some out would mean naming each of the others, and only Kit's cache knows their arguments.
+- **Having the server skip them would not help.** It would leave their answers in the cache, out of date, for the screen to show once it moves to them.
+
+So the library waits for Kit rather than reaching into its cache. The likely shape, once Kit can: the app marks a read it holds ahead, and a hint drops those instances. They are read once, when shown, instead of on every hint.
+
+Done when: Kit can drop a query instance, or leave chosen instances out of `.updates()`, through its public API, and then a screen can name the reads it holds ahead, a hint drops them, and a test shows the drop.
 
 ## TypeScript 7 alone in the example
 
