@@ -124,7 +124,7 @@ A session that expires on its own gives the app no moment to call `disconnect`: 
 - **A publication whose number is not the last plus one:** it reads everything.
 - **One request:** the hints of a task are gathered and read in one `readAgain(told).updates(...reads)`, with only the reads that follow a told kind. Kit sends every instance of them the screen holds, with its argument. The server refreshes the instances that heard a hint and ignores the others, which keep their answers.
 - **One request at a time:** what is told while one is on its way waits until it has landed and 500 ms have passed since it was sent. A burst costs two reads at most, however fast they answer.
-- **Failures are kept:** a request that fails keeps what it was told, to be read with the next hint or once the socket is back. Nothing retries on a timer, and nothing polls.
+- **Failures are kept:** a request that fails keeps what it was told, to be read with the next hint or once the socket is back, and so does a request that succeeds for what it answers it could not read in. Nothing retries on a timer, and nothing polls.
 - **An unanswered request is bounded:** one with no answer within 15 s counts as failed, so the next may go, and a request the network holds no longer holds every read after it. Kit puts a command's answer in whenever it lands, so a late answer can land over a newer one: what it was told is read again after it. The request itself cannot be called off, as Kit's commands take no signal.
 - **Liveness:** it pings every 30 s and gives the socket up when no pong comes within 10 s; it reconnects after 1 s, doubling to 30 s, with jitter.
 - **An older build:** when hello's version is not this tab's, it calls Kit's `updated.check()`. The reload is the app's, because only the app knows its drafts; Kit's documented `beforeNavigate` pattern loads the new build at the next navigation.
@@ -132,6 +132,8 @@ A session that expires on its own gives the app no moment to call `disconnect`: 
 ### The read-again command
 
 `readAgainCommand(followed)` is a plain Kit `command`. It has no guard of its own: each read is refreshed through its own query and that query's checks. Its input is checked by hand, as the library takes no schema dependency: each kind maps to `true` or to at most 100 ids, past which the browser reads the kind whole.
+
+A refresh that fails on the server fails only its own read: Kit answers the command, and the read shows its error. So the command awaits each refresh it asks for, and answers with what it could not read in: the kinds, or the records, that each failed read heard. A refusal (4xx), such as a record since deleted, is the read's own answer and is not read again. Kit reuses the awaited answer for the one it sends, so nothing is read twice.
 
 ### Development
 
@@ -149,7 +151,6 @@ What comes after this core goes in `docs/followups.md`:
 
 - closing the sockets of a session that expired on its own;
 - a stale notice with Retry while the socket is down or a read failed;
-- re-reading a read whose own refresh failed on the server, beside its command that succeeded;
 - one ordered line shared by the follower and the page's own refreshes;
 - dropping data a screen read ahead (the next week) instead of reading it again;
 - re-reading when a tab is shown again under `vite dev`.

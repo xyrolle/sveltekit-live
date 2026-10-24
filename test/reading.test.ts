@@ -5,10 +5,10 @@ import { readingOf } from "../src/reading.ts";
 /** A screen's reads, each answered when the test says. */
 function screen() {
 	const sent: Told[] = [];
-	const answers: PromiseWithResolvers<void>[] = [];
+	const answers: PromiseWithResolvers<Told>[] = [];
 	const reading = readingOf((told) => {
 		sent.push(told);
-		const answer = Promise.withResolvers<void>();
+		const answer = Promise.withResolvers<Told>();
 		answers.push(answer);
 		return answer.promise;
 	});
@@ -57,11 +57,11 @@ describe("readingOf", () => {
 		await vi.advanceTimersByTimeAsync(1_000);
 		expect(sent).toHaveLength(1);
 
-		answers[0]?.resolve();
+		answers[0]?.resolve({});
 		await settle();
 		expect(sent).toEqual([{ todo: ["a"] }, { todo: ["b", "c"] }]);
 
-		answers[1]?.resolve();
+		answers[1]?.resolve({});
 		reading.tell("todo", "d");
 		await settle();
 		expect(sent).toHaveLength(2);
@@ -86,6 +86,20 @@ describe("readingOf", () => {
 		expect(sent).toEqual([{ todo: ["a"] }, { todo: ["a"] }]);
 	});
 
+	it("keeps what a read answers it could not read in, until the socket is back", async () => {
+		const { reading, sent, answers } = screen();
+		reading.tell("todos");
+		reading.tell("todo", "a");
+		await settle();
+		answers[0]?.resolve({ todo: ["a"] });
+		await vi.advanceTimersByTimeAsync(60_000);
+		expect(sent).toHaveLength(1);
+
+		reading.recover();
+		await settle();
+		expect(sent).toEqual([{ todos: true, todo: ["a"] }, { todo: ["a"] }]);
+	});
+
 	it("lets the next read go once one has had no answer for 15 s, with what that one was told", async () => {
 		const { reading, sent } = screen();
 		reading.tell("todo", "a");
@@ -104,7 +118,7 @@ describe("readingOf", () => {
 		await vi.advanceTimersByTimeAsync(15_000);
 		expect(sent).toHaveLength(1);
 
-		answers[0]?.resolve();
+		answers[0]?.resolve({});
 		await settle();
 		expect(sent).toEqual([{ todo: ["a"] }, { todo: ["a"] }]);
 	});

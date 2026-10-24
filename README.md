@@ -163,6 +163,16 @@ await disconnect(env.LIVE.getByName(tenant), user);
 </script>
 ```
 
+A read that fails on the server is read again with the next hint of its kind, or once the socket is back. Kit keeps its last answer in `.current` meanwhile, and the example shows that answer rather than awaiting the failed read again:
+
+```svelte
+<!-- src/routes/Todo.svelte -->
+<script lang="ts">
+	const read = $derived(todo(id));
+	const item = $derived(read.current ?? (await read));
+</script>
+```
+
 In the example, `pnpm dev` runs it under Vite, where each tab sees its own changes only. `pnpm build` and then `pnpm preview` (`wrangler dev`) run it live across tabs.
 
 ## API
@@ -171,7 +181,7 @@ In the example, `pnpm dev` runs it under Vite, where each tab sees its own chang
 - **`Hint`** (`sveltekit-live`): `{ kind; id?: string; userId?: string }`, its `kind` one of the app's kinds. A hint with a `userId` reaches only that user's sockets.
 - **`Register`** (`sveltekit-live`): what the app's `app.d.ts` declares: `kind`, the union of its kinds. Undeclared, a kind is any string.
 - **`publish(hub, hints)`** (`sveltekit-live/server`): sends the hints, numbered, to every socket on `hub`. Under `vite dev` it does nothing.
-- **`readAgainCommand(followed)`** (`sveltekit-live/server`): the command that screens read again through. Each read refreshes through its own query and that query's checks; the command has no guard of its own.
+- **`readAgainCommand(followed)`** (`sveltekit-live/server`): the command that screens read again through. Each read refreshes through its own query and that query's checks; the command has no guard of its own. It answers with the kinds and records of the reads that failed, which the screen keeps to read again. A refusal (4xx) is a read's own answer, not a failure.
 - **`connect(request, { hub, user })`** (`sveltekit-live/server`): hands the socket to `hub`, for `user`. It answers 426 to a request that is no WebSocket upgrade, and 403 to one from another origin.
 - **`disconnect(hub, user)`** (`sveltekit-live/server`): closes every socket of `user` on `hub`: none of them hears anything more. Each screen reconnects, and one the socket route refuses keeps retrying, as after any lost connection. Under `vite dev` it does nothing.
 - **`followChanges({ socket, followed, readAgain })`** (`sveltekit-live/client`): called once, in the root layout. It opens one socket per tab, to the route at `socket`.

@@ -43,9 +43,20 @@ export const PONG = "pong";
 
 /**
  * What a screen was told since it last read again, by kind: `true` for the
- * kind whole, or the ids of the records the hints named.
+ * kind whole, or the ids of the records the hints named. A read-again
+ * answers with the same shape: what it could not read in.
  */
 export type Told = Record<string, true | string[]>;
+
+/** `Told`, as the follower and the read-again command hold it. */
+export type Heard = Map<string, true | Set<string>>;
+
+/** `heard` as it travels. */
+export function toldOf(heard: Heard): Told {
+	return Object.fromEntries(
+		[...heard].map(([kind, ids]) => [kind, ids === true ? true : [...ids]]),
+	);
+}
 
 /** The most records a screen names for one kind; past it, it reads the kind whole. */
 export const TOLD_AT_MOST = 100;

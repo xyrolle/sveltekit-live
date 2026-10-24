@@ -1,13 +1,10 @@
-import { TOLD_AT_MOST, type Told } from "./hint.ts";
+import { type Heard, TOLD_AT_MOST, type Told, toldOf } from "./hint.ts";
 
 /** The least time between two reads, so a burst of hints costs two at most. */
 const WINDOW_MS = 500;
 
 /** How long a read may go unanswered before it counts as failed and the next may go. */
 const ANSWER_WITHIN_MS = 15_000;
-
-/** What a read is told: each kind whole (`true`), or the records named. */
-type Heard = Map<string, true | Set<string>>;
 
 /** When a screen reads again what it was told (`readingOf`). */
 export type Reading = {
@@ -24,10 +21,12 @@ export type Reading = {
  * way at a time; what is told meanwhile waits until it has landed and
  * `WINDOW_MS` has passed since it was sent. What a failed read was told is
  * kept, to be read with the next hint or once the socket is back, never on
- * a timer. A read with no answer within `ANSWER_WITHIN_MS` counts as failed,
- * so that the network holding one does not hold every read after it.
+ * a timer, and so is what a read answers that it could not read in (a read
+ * that failed on the server). A read with no answer within
+ * `ANSWER_WITHIN_MS` counts as failed, so that the network holding one does
+ * not hold every read after it.
  */
-export function readingOf(read: (told: Told) => Promise<unknown>): Reading {
+export function readingOf(read: (told: Told) => Promise<Told>): Reading {
 	let pending: Heard = new Map();
 	let reading = false;
 	let window: ReturnType<typeof setTimeout> | undefined;
@@ -59,7 +58,7 @@ export function readingOf(read: (told: Told) => Promise<unknown>): Reading {
 		kept = false;
 		schedule();
 	};
-	const fail = (told: Heard, failure: unknown) => {
+	const fail = (told: ToldEntries, failure: unknown) => {
 		console.error(
 			"sveltekit-live: reading again failed. It is read again with the next hint, or once the socket is back.",
 			failure,
@@ -85,17 +84,15 @@ export function readingOf(read: (told: Told) => Promise<unknown>): Reading {
 			late = true;
 			fail(told, new Error(`No answer within ${ANSWER_WITHIN_MS} ms.`));
 		}, ANSWER_WITHIN_MS);
-		read(wireOf(told)).then(
-			() => {
+		read(toldOf(told)).then(
+			(unread) => {
 				// Kit puts a late answer in whenever it lands, maybe over a
 				// newer one: what it was told is read again after it.
 				if (late) {
 					for (const [kind, id] of each(told)) tell(kind, id);
-					return;
+				} else {
+					answered(unread);
 				}
-				clearTimeout(unanswered);
-				reading = false;
-				schedule();
 			},
 			(failure: unknown) => {
 				if (late) return;
@@ -103,6 +100,20 @@ export function readingOf(read: (told: Told) => Promise<unknown>): Reading {
 				fail(told, failure);
 			},
 		);
+	};
+	/** A read landed, with what the server could not read in, kept as a failed read's. */
+	const answered = (unread: Told) => {
+		clearTimeout(unanswered);
+		const kinds = Object.keys(unread);
+		if (kinds.length > 0) {
+			fail(
+				Object.entries(unread),
+				new Error(`The server could not read ${kinds.join(", ")} again.`),
+			);
+			return;
+		}
+		reading = false;
+		schedule();
 	};
 
 	return {
@@ -119,15 +130,12 @@ export function readingOf(read: (told: Told) => Promise<unknown>): Reading {
 	};
 }
 
+/** What a read was told, held (`Heard`) or as it travels (`Told`). */
+type ToldEntries = Iterable<[string, true | Iterable<string>]>;
+
 /** Each kind a read was told, with each record it named, or none for the kind whole. */
-function* each(told: Heard): Generator<[string, string | undefined]> {
+function* each(told: ToldEntries): Generator<[string, string | undefined]> {
 	for (const [kind, ids] of told) {
 		for (const id of ids === true ? [undefined] : ids) yield [kind, id];
 	}
-}
-
-function wireOf(told: Heard): Told {
-	return Object.fromEntries(
-		[...told].map(([kind, ids]) => [kind, ids === true ? true : [...ids]]),
-	);
 }
