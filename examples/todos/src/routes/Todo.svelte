@@ -3,7 +3,10 @@
 
 	let { id }: { id: string } = $props();
 
-	const item = $derived(await todo(id));
+	const read = $derived(todo(id));
+	// The first answer is awaited. A later read that fails keeps the last one
+	// on screen until the follower reads it again.
+	const item = $derived(read.current ?? (await read));
 </script>
 
 <li>

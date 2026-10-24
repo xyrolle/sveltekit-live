@@ -3,6 +3,9 @@
 	import Todo from "./Todo.svelte";
 
 	let text = $state("");
+	const list = todos();
+	// As in Todo.svelte, a later read that fails keeps the last answer.
+	const ids = $derived(list.current ?? (await list));
 
 	async function submit(event: SubmitEvent) {
 		event.preventDefault();
@@ -19,7 +22,7 @@
 </form>
 
 <ul>
-	{#each await todos() as id (id)}
+	{#each ids as id (id)}
 		<Todo {id} />
 	{/each}
 </ul>
